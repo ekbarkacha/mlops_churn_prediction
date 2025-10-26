@@ -27,5 +27,8 @@ jobs:
           pip install pytest
 
       - name: Run pytest
+        env:
+            KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+            KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
         run: |
           pytest
