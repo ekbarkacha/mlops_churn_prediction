@@ -1,0 +1,4 @@
+pandas==2.3.3
+kaggle==1.7.4.5
+python-dotenv==1.1.1
+scikit-learn==1.7.2
