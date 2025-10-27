@@ -52,7 +52,7 @@ def data_encoding(df: pd.DataFrame) -> pd.DataFrame:
         # Identify categorical columns (non-numeric)
         le = LabelEncoder()
         df = df.copy(deep=True)
-        text_data_features = [col for col in df.columns if col not in df.describe().columns]
+        text_data_features = [col for col in df.columns if col not in df.describe().columns and col != "customerID"]
 
         # Encode each categorical column
         for col in text_data_features:

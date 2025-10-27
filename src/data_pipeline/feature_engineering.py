@@ -22,7 +22,10 @@ def feature_selection(df: pd.DataFrame) -> pd.DataFrame:
 
 def feature_scaling(df: pd.DataFrame, method='standard') -> pd.DataFrame:
     mms = MinMaxScaler()
-    for col in ['tenure', 'MonthlyCharges', 'TotalCharges']:
+    # for col in ['tenure', 'MonthlyCharges', 'TotalCharges']:
+    #     df[col] = mms.fit_transform(df[[col]])
+    # return df
+    for col in df.columns:
         df[col] = mms.fit_transform(df[[col]])
     return df
 
