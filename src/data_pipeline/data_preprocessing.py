@@ -132,8 +132,8 @@ def grab_col_names(df: pd.DataFrame, cat_th=10, car_th=20):
     except Exception as e:
         logger.error(f"Error during column name extraction: {e}")
         raise RuntimeError(f"Column extraction failed: {e}")
-
-def main():
+    
+def data_processing_pipeline():
     logger.info("Starting data preprocessing...")
     RAW_DATA_PATH = f"{RAW_DATA_DIR}/{raw_file_name}"
     
@@ -162,6 +162,11 @@ def main():
     logger.info(f"Processed data saved to {PROCESSED_PATH} ({df.shape[0]} rows)")
 
     logger.info("Data preprocessing completed..")
+
+    return PROCESSED_PATH
+
+def main():
+    processed_path = data_processing_pipeline()
 
 if __name__ == "__main__":
     main()

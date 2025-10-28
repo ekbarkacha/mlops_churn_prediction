@@ -25,14 +25,12 @@ def feature_scaling(df: pd.DataFrame, method='standard') -> pd.DataFrame:
     # for col in ['tenure', 'MonthlyCharges', 'TotalCharges']:
     #     df[col] = mms.fit_transform(df[[col]])
     # return df
-    for col in df.columns:
+    for col in df.select_dtypes(include='number').columns:
         df[col] = mms.fit_transform(df[[col]])
     return df
 
-def main():
+def feature_engineering_pipeline(PROCESSED_DATA):
     logger.info("Starting feature engineering..")
-
-    PROCESSED_DATA = f"{PROCESSED_DATA_DIR}/{processed_file_name}"
 
     if not os.path.exists(PROCESSED_DATA):
         logger.error(f"Processed data not found at {PROCESSED_DATA}")
@@ -45,7 +43,12 @@ def main():
     df = feature_creation(df)
     df = feature_transformation(df)
     df = feature_selection(df)
-    df = feature_scaling(df)    
+    df = feature_scaling(df)
+    return df 
+
+def main():
+    PROCESSED_DATA = f"{PROCESSED_DATA_DIR}/{processed_file_name}"
+    df = feature_engineering_pipeline(PROCESSED_DATA)
 
     # Save features
     FEATURE_DATA = f"{PROCESSED_DATA_DIR}/{feature_file_name}"

@@ -35,3 +35,7 @@ EXPECTED_COLUMNS = [
     "TotalCharges",
     "Churn"
 ]
+
+# Experiment name in MLflow
+MLFLOW_EXPERIMENT_NAME = "Customer_Churn_Prediction"
+MODEL_ARTIFACTS_PATH = "artifacts"
