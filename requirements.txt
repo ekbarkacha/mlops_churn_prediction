@@ -4,3 +4,7 @@ python-dotenv==1.1.1
 scikit-learn==1.7.2
 dvc[s3]==3.63.0
 pytest==8.4.2
+mlflow==3.5.0
+xgboost==3.1.0
+torch==2.9.0
+imblearn
