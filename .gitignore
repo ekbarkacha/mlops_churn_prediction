@@ -1,1 +1,14 @@
 .DS_Store
+data/*.csv
+__pycache__/
+*.pyc
+.vscode/
+.ipynb_checkpoints
+.env
+logs/
+mlruns/
+*.sqlite
+*.log
+.venv/
+artifacts/
+models/
