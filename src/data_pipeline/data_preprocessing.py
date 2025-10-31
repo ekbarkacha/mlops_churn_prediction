@@ -1,12 +1,15 @@
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
+import joblib
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 
 from src.utils.logger import get_logger
 from src.data_pipeline.data_ingestion import ingest_from_kaggle,ingest_from_csv
-from src.utils.const import KAGGLE_DATASET,EXPECTED_COLUMNS,RAW_DATA_DIR,PROCESSED_DATA_DIR,raw_file_name,processed_file_name
+from src.utils.const import (KAGGLE_DATASET,EXPECTED_COLUMNS,RAW_DATA_DIR,
+                             PROCESSED_DATA_DIR,raw_file_name,processed_file_name,
+                             PREPROCESSORS,label_encoders_file_name)
 
 logger = get_logger(__name__)
 
@@ -35,7 +38,7 @@ def data_cleaning(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
-def data_encoding(df: pd.DataFrame) -> pd.DataFrame:
+def data_encoding(df: pd.DataFrame,save=False) -> pd.DataFrame:
     """
     Encode categorical columns and target variable ('Churn') numerically.
 
@@ -50,13 +53,22 @@ def data_encoding(df: pd.DataFrame) -> pd.DataFrame:
             df["Churn"] = df["Churn"].map({'No': 0, 'Yes': 1})
 
         # Identify categorical columns (non-numeric)
-        le = LabelEncoder()
         df = df.copy(deep=True)
-        text_data_features = [col for col in df.columns if col not in df.describe().columns and col != "customerID"]
+        cat_columns = df.select_dtypes(include=["object", "category"]).columns.tolist()
+        if "customerID" in cat_columns:
+            cat_columns.remove("customerID")
 
-        # Encode each categorical column
-        for col in text_data_features:
+        encoders = {}
+        for col in cat_columns:
+            le = LabelEncoder()
             df[col] = le.fit_transform(df[col])
+            encoders[col] = le
+
+        if save:    
+            os.makedirs(PREPROCESSORS,exist_ok=True)
+            save_path = os.path.join(PREPROCESSORS, label_encoders_file_name)
+            joblib.dump(encoders, save_path)
+            logger.info(f"Label encoder saved to {save_path}")
 
         logger.info("Data encoding completed successfully.")
     except Exception as e:
@@ -133,7 +145,7 @@ def grab_col_names(df: pd.DataFrame, cat_th=10, car_th=20):
         logger.error(f"Error during column name extraction: {e}")
         raise RuntimeError(f"Column extraction failed: {e}")
     
-def data_processing_pipeline():
+def data_processing_pipeline(save=False):
     logger.info("Starting data preprocessing...")
     RAW_DATA_PATH = f"{RAW_DATA_DIR}/{raw_file_name}"
     
@@ -153,7 +165,7 @@ def data_processing_pipeline():
     df = data_cleaning(df)
 
     # Encode categoricals
-    df = data_encoding(df)
+    df = data_encoding(df,save)
 
     # Save processed data
     PROCESSED_PATH = f"{PROCESSED_DATA_DIR}/{processed_file_name}"

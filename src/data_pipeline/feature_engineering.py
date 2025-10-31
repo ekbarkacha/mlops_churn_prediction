@@ -1,10 +1,13 @@
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
+import joblib
 import pandas as pd
-from sklearn.preprocessing import MinMaxScaler, LabelEncoder
+from sklearn.preprocessing import MinMaxScaler,StandardScaler
 from src.utils.logger import get_logger
-from src.utils.const import PROCESSED_DATA_DIR,processed_file_name,feature_file_name
+from src.utils.const import (PROCESSED_DATA_DIR,processed_file_name,
+                             feature_file_name,PREPROCESSORS,scaler_file_name)
+
 
 logger = get_logger(__name__)
 
@@ -20,16 +23,30 @@ def feature_selection(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
-def feature_scaling(df: pd.DataFrame, method='standard') -> pd.DataFrame:
-    mms = MinMaxScaler()
-    # for col in ['tenure', 'MonthlyCharges', 'TotalCharges']:
-    #     df[col] = mms.fit_transform(df[[col]])
-    # return df
-    for col in df.select_dtypes(include='number').columns:
-        df[col] = mms.fit_transform(df[[col]])
+def feature_scaling(df: pd.DataFrame, method='minmax',save=False) -> pd.DataFrame:
+    if method == "standard":
+        scaler = StandardScaler()
+    elif method == "minmax":
+        scaler = MinMaxScaler()
+    else:
+        raise ValueError("method must be 'standard' or 'minmax'")
+    
+    df = df.copy(deep=True)
+    #num_col = df.select_dtypes(include='number').columns.tolist()
+    num_col = ['tenure', 'MonthlyCharges', 'TotalCharges']
+    if "Churn" in num_col:
+        num_col.remove("Churn")
+    df[num_col] = scaler.fit_transform(df[num_col])
+
+    if save:    
+        os.makedirs(PREPROCESSORS,exist_ok=True)
+        save_path = os.path.join(PREPROCESSORS, scaler_file_name)
+        joblib.dump(scaler, save_path)
+        logger.info(f"Scaler saved to {save_path}")
+
     return df
 
-def feature_engineering_pipeline(PROCESSED_DATA):
+def feature_engineering_pipeline(PROCESSED_DATA,save=False):
     logger.info("Starting feature engineering..")
 
     if not os.path.exists(PROCESSED_DATA):
@@ -43,7 +60,7 @@ def feature_engineering_pipeline(PROCESSED_DATA):
     df = feature_creation(df)
     df = feature_transformation(df)
     df = feature_selection(df)
-    df = feature_scaling(df)
+    df = feature_scaling(df,save=save)
     return df 
 
 def main():

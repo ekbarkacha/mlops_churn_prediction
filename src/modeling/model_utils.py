@@ -1,6 +1,7 @@
 import os
 import joblib
 import mlflow
+import mlflow.pyfunc
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score,roc_auc_score
 from sklearn.model_selection import train_test_split
 
@@ -31,3 +32,11 @@ def save_model(model, path):
 def log_metrics_to_mlflow(metrics: dict):
     for k, v in metrics.items():
         mlflow.log_metric(k, v)
+
+class WrappedModel(mlflow.pyfunc.PythonModel):
+    def __init__(self, model):
+        self.model = model
+
+    def predict(self, context, model_input):
+        return self.model.predict(model_input)
+
