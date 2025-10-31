@@ -8,7 +8,7 @@ This project focuses on building a Real-Time Customer Churn Prediction System po
 
 ## System Design Flow Diagram
 
-Below is the system design architecture that outlines the complete MLOps workflow from data ingestion and preprocessing to model deployment, monitoring and retraining:
+Below is the system design architecture that outlines the complete MLOps workflow from data ingestion and preprocessing to model deployment, monitoring and retraining. Also we have a [Product Design](docs/Product_Design.pdf).
 <!-- ![System Design Flow Diagram](images/system_design_flow_diagram.png) -->
 <p align="center">
   <img src="images/system_design_flow_diagram.png" alt="System Design Flow Diagram" width="50%">
