@@ -2,14 +2,23 @@
 KAGGLE_DATASET="blastchar/telco-customer-churn"
 
 # Dir Paths
-LOG_DIR = "logs"
+LOG_DIR = "data/logs"
 RAW_DATA_DIR = "data/raw"
 PROCESSED_DATA_DIR = "data/processed"
+USERS_DATA_DIR = "data/users"
+INFERENCE_DATA_DIR = "data/inference"
+MODEL_DIR = "data/models"
+PREPROCESSORS = "data/preprocessors"
+
 
 # File Names
 raw_file_name = "WA_Fn-UseC_-Telco-Customer-Churn.csv"
 processed_file_name = "customers_cleaned.csv"
 feature_file_name = "customers_features.csv"
+users_file_name = "users.json"
+inference_file_name = "production_data.csv"
+label_encoders_file_name = "label_encoder.joblib"
+scaler_file_name = "scaler.joblib"
 
 # Expected Colums
 EXPECTED_COLUMNS = [

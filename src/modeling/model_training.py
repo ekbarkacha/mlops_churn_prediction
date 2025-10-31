@@ -4,8 +4,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 import numpy as np
 import yaml
 import mlflow
-import mlflow.sklearn
-import mlflow.xgboost
 from mlflow.tracking import MlflowClient
 import pandas as pd
 from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
@@ -18,14 +16,14 @@ import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
 from src.data_pipeline.data_preprocessing import data_processing_pipeline
 from src.data_pipeline.feature_engineering import feature_engineering_pipeline
-from src.modeling.model_utils import split_data, evaluate_model, save_model, log_metrics_to_mlflow
+from src.modeling.model_utils import split_data, evaluate_model, save_model, log_metrics_to_mlflow,WrappedModel
 from src.utils.logger import get_logger
 from src.utils.config import MLFLOW_TRACKING_URI
 from src.utils.const import (MLFLOW_EXPERIMENT_NAME,
                              MODEL_ARTIFACTS_PATH,
                              PROCESSED_DATA_DIR,
                              processed_file_name,
-                             feature_file_name)
+                             feature_file_name,PREPROCESSORS)
 from src.modeling.nn_model import NN,PyTorchWrapper
 import json
 from pathlib import Path
@@ -74,6 +72,9 @@ def tune_and_log_model(model_cls, model_name, X_train, y_train, X_test, y_test, 
         # model_path = save_model(best_model, f"{MODEL_ARTIFACTS_PATH}/{model_name.lower()}.joblib")
         # mlflow.log_artifact(model_path)
         log_model_func(best_model)
+        for file_name in os.listdir(PREPROCESSORS):
+            artifact_path = os.path.join(PREPROCESSORS, file_name)
+            mlflow.log_artifact(artifact_path, artifact_path="preprocessors")
 
         logger.info(f"{model_name} Metrics: {metrics}")
 
@@ -90,14 +91,17 @@ def train_all_models(df: pd.DataFrame):
 
     input_example = X_test.iloc[:2].astype("float64")
 
-    # Random Forest
+    # Random Forest 
     tune_and_log_model(
         RandomForestClassifier,
         "RandomForest",
         X_train, y_train, X_test, y_test,
         config["random_forest"],
         all_metrics,
-        lambda m: mlflow.sklearn.log_model(sk_model=m, name="model",input_example=input_example)
+        lambda m: mlflow.pyfunc.log_model(
+            python_model=WrappedModel(m), 
+            name="model",
+            input_example=input_example) # Wrapped as pyfunc
     )
 
     # XGBoost
@@ -107,7 +111,10 @@ def train_all_models(df: pd.DataFrame):
         X_train, y_train, X_test, y_test,
         config["xgboost"],
         all_metrics,
-        lambda m: mlflow.xgboost.log_model(xgb_model=m, name="model",input_example=input_example)
+        lambda m: mlflow.pyfunc.log_model(
+            python_model=WrappedModel(m),
+            name="model",
+            input_example=input_example) # Wrapped as pyfunc
     )
 
     # Neural Network
@@ -176,9 +183,14 @@ def train_all_models(df: pd.DataFrame):
         all_metrics["neural_net"] = best_metrics
         # torch.save(best_model.state_dict(), f"{MODEL_ARTIFACTS_PATH}/neural_net.pt")
         # mlflow.log_artifact(f"{MODEL_ARTIFACTS_PATH}/neural_net.pt")
-        mlflow.pyfunc.log_model(python_model=PyTorchWrapper(best_model.to("cpu")), 
-                                 name="model",
-                                 input_example=input_example)
+        mlflow.pyfunc.log_model(python_model=PyTorchWrapper(
+            best_model.to("cpu")),
+            name="model",
+            input_example=input_example) # Wrapped as pyfunc
+        
+        for file_name in os.listdir(PREPROCESSORS):
+            artifact_path = os.path.join(PREPROCESSORS, file_name)
+            mlflow.log_artifact(artifact_path, artifact_path="preprocessors")
 
     # # Save all metrics
     # Path(MODEL_ARTIFACTS_PATH).mkdir(exist_ok=True)
@@ -191,7 +203,9 @@ def train_all_models(df: pd.DataFrame):
 
 
 def register_best_model():
-    client = MlflowClient()
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    
+    client = MlflowClient(tracking_uri=MLFLOW_TRACKING_URI)
     experiment = client.get_experiment_by_name(MLFLOW_EXPERIMENT_NAME)
     if experiment is None:
         logger.error(f"Experiment {MLFLOW_EXPERIMENT_NAME} not found.")
@@ -212,8 +226,8 @@ def register_best_model():
     logger.info(f"Registered model version: {registered_model.version}")
 
 if __name__ == "__main__":
-    processed_data_path = data_processing_pipeline()
-    df = feature_engineering_pipeline(processed_data_path)
+    processed_data_path = data_processing_pipeline(save=True)
+    df = feature_engineering_pipeline(processed_data_path,save=True)
     if not df.empty:
         train_all_models(df)
         register_best_model()
