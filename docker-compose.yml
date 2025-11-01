@@ -1,8 +1,6 @@
 services:
   fastapi:
-      build:
-        context: .
-        dockerfile: Dockerfile.fastapi
+      image: ekbarkacha/fastapi:latest
       container_name: fastapi
       env_file:
         - .env
