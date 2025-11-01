@@ -17,10 +17,14 @@ jobs:
       - name: Set up Docker Compose
         run: |
           docker compose version
+          
+      - name: Enable Docker BuildKit
+        run: |
+          export DOCKER_BUILDKIT=1  
 
       - name: Build Docker Compose services
         run: |
-          docker compose build
+          DOCKER_BUILDKIT=1 docker compose build
 
       - name: List built images
         run: docker images
