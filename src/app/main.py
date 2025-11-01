@@ -1,7 +1,7 @@
 import os
 import time, uuid, json
 from fastapi import FastAPI, Depends, HTTPException,UploadFile,File,Request,BackgroundTasks
-from fastapi.responses import JSONResponse,HTMLResponse
+from fastapi.responses import JSONResponse,HTMLResponse,Response
 from fastapi.security import OAuth2PasswordRequestForm
 from datetime import datetime, timedelta, timezone
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -31,6 +31,14 @@ from evidently.presets import DataDriftPreset, DataSummaryPreset
 from src.data_pipeline.data_preprocessing import validate_schema
 from src.app.model_wrapper import UniversalMLflowWrapper
 from src.utils.logger import get_logger
+
+from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST, REGISTRY
+from src.monitoring.metrics import (CURRENT_MODEL_VERSION,PREDICTION_COUNT,PREDICTION_LATENCY,
+                                    PREDICTION_ERRORS,API_REQUEST_COUNT,API_LATENCY,API_ERRORS,
+                                    DRIFT_SHARE_GAUGE, DRIFT_COUNT_GAUGE,PIPELINE_ERROR_COUNTER,
+                                    MODEL_ACCURACY_GAUGE,MODEL_PRECISION_GAUGE,MODEL_RECALL_GAUGE,
+                                    MODEL_ROC_AUC_GAUGE,MODEL_F1_GAUGE)
 
 logger = get_logger("customer_churn_api")
 
@@ -64,6 +72,7 @@ async def lifespan(app: FastAPI):
 
     if not versions:
         logger.warning(f"No model versions found for {MLFLOW_EXPERIMENT_NAME}. Skipping model load.")
+        logger.info("App will start without a loaded model. Inference endpoints will return 503.")
         yield
         return
 
@@ -72,6 +81,9 @@ async def lifespan(app: FastAPI):
     model_uri = f"models:/{latest_version.name}/{latest_version.version}"
     version_folder = f"{MODEL_DIR}/v{latest_version.version}"
 
+    # Get run name from the latest version
+    run_info = client.get_run(latest_version.run_id)
+    run_name = run_info.data.tags.get("mlflow.runName", "Unnamed Run")
 
     # Versioned model directory
     os.makedirs(MODEL_DIR, exist_ok=True)
@@ -111,6 +123,7 @@ async def lifespan(app: FastAPI):
      # Store version directory for access by other endpoints
     app.state.version_folder = version_folder
 
+    CURRENT_MODEL_VERSION.labels(model_name=MLFLOW_EXPERIMENT_NAME,model_type=run_name).set(latest_version.version)
     logger.info(f"Model {MLFLOW_EXPERIMENT_NAME} version {latest_version.version} loaded successfully.")
     yield
 
@@ -122,6 +135,12 @@ async def lifespan(app: FastAPI):
 # App instantiated using lifespan 
 app = FastAPI(lifespan=lifespan,title="Customer Churn Prediction API")
 
+# Initialize metrics collector
+instrumentator = Instrumentator().instrument(app)
+
+# Expose /metrics endpoint for Prometheus scraping
+instrumentator.expose(app)
+
 # For rate limit
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
@@ -129,25 +148,51 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 @app.middleware("http")
-async def log_timing(request: Request, call_next):
-    """Log request method, path, status, duration, and unique ID."""
+async def log_and_monitor_requests(request: Request, call_next):
+    """
+    Log and monitor all HTTP requests, except for ("/metrics","/verify-session","/update_metrics").
+    """
+
     start = time.perf_counter()
-    req_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
-    response = await call_next(request)
-    duration = time.perf_counter() - start
-    response.headers["X-Process-Time"] = f"{duration:.3f}s"
-    response.headers["X-Request-ID"] = req_id
+    method = request.method
+    endpoint = request.url.path
 
-    log_data = {
-        "id": req_id,
-        "method": request.method,
-        "path": request.url.path,
-        "status": response.status_code,
-        "duration": round(duration, 3)
-    }
+    # Skip Prometheus or internal endpoints
+    if endpoint in ["/metrics","/verify-session","/update_metrics"]:
+        return await call_next(request)
 
-    logger.info(json.dumps(log_data))
-    return response
+    try:
+        # Generate or get request ID
+        req_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+
+        # Process request
+        response = await call_next(request)
+
+        duration = time.perf_counter() - start
+        response.headers["X-Process-Time"] = f"{duration:.3f}s"
+        response.headers["X-Request-ID"] = req_id
+
+        # Log request metadata
+        log_data = {
+            "id": req_id,
+            "method": method,
+            "path": endpoint,
+            "status": response.status_code,
+            "duration": round(duration, 3)
+        }
+
+        logger.info(json.dumps(log_data))
+
+        # Update Prometheus metrics
+        API_REQUEST_COUNT.labels(endpoint=endpoint, method=method).inc()
+        API_LATENCY.labels(method=method, endpoint=endpoint).observe(duration)
+
+        return response
+
+    except Exception as e:
+        API_ERRORS.labels(endpoint=endpoint, method=method, status_code=500).inc()
+        logger.exception(f"{method} {endpoint} failed: {str(e)}")
+        return Response("Internal server error", status_code=500)
 
 # Allow requests from frontend
 set_middleware(app)
@@ -156,32 +201,37 @@ set_middleware(app)
 @app.post("/register", dependencies=[Depends(verify_api_key)])
 @limiter.limit("5/minute")
 def register(user: User,request: Request):
-
     """
     Registers a new user (requires API key).
     - Checks if username already exists.
     - Hashes password and saves username, password, and role to user database.
     """
+    method = request.method
+    endpoint = request.url.path
+    try:
+        users = load_users()
+        if user.username in users:
+            raise HTTPException(status_code=400, detail="Username already exists")
+        
+        # Store role along with username and password
+        hashed_password = get_password_hash(user.password)
+        users[user.username] = {
+            "username": user.username,
+            "hashed_password": hashed_password,
+            "role": user.role
+        }
+        save_users(users)
+        logger.info(f"User {user.username} registered successfully.")
+        return {"msg": "User created successfully"}
+    except HTTPException as e:
+        API_ERRORS.labels(endpoint=endpoint, method=method, status=e.status_code).inc()
+        logger.error(f"Registration failed: {e.detail}")
+        raise
 
-    users = load_users()
-    if user.username in users:
-        raise HTTPException(status_code=400, detail="Username already exists")
-    
-    # Store role along with username and password
-    hashed_password = get_password_hash(user.password)
-    users[user.username] = {
-        "username": user.username,
-        "hashed_password": hashed_password,
-        "role": user.role
-    }
-    save_users(users)
-    logger.info(f"User {user.username} registered successfully.")
-    return {"msg": "User created successfully"}
 
 @app.post("/token", dependencies=[Depends(verify_api_key)])
 @limiter.limit("5/minute")
 def login(request: Request,form_data: OAuth2PasswordRequestForm = Depends()):
-
     """
     Authenticates user credentials and issues a JWT token.
     - Requires API key.
@@ -189,30 +239,37 @@ def login(request: Request,form_data: OAuth2PasswordRequestForm = Depends()):
     - Generates JWT with embedded user role.
     - Sets token as an HttpOnly cookie for session persistence.
     """
-    user = authenticate_user(form_data.username, form_data.password)
-    if not user:
-        raise HTTPException(status_code=401, detail="Incorrect username or password")
-    
-    # Add role to JWT
-    role = user.get("role", APP_USERS.get(1))
-    
-    token = create_access_token(
-        data={"sub": user["username"], "role": role},
-        expires_delta=timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
-    )
+    method = request.method
+    endpoint = request.url.path
+    try:
+        user = authenticate_user(form_data.username, form_data.password)
+        if not user:
+            raise HTTPException(status_code=401, detail="Incorrect username or password")
+        
+        # Add role to JWT
+        role = user.get("role", APP_USERS.get(1))
+        
+        token = create_access_token(
+            data={"sub": user["username"], "role": role},
+            expires_delta=timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
+        )
 
-    # Set token as HttpOnly cookie
-    response = JSONResponse(content={"msg": "Login successful"})
-    response.set_cookie(
-        key="access_token",
-        value=token,
-        httponly=True,
-        secure=False,  # True if using HTTPS
-        samesite="Lax",
-        max_age=ACCESS_TOKEN_EXPIRE_DAYS*24*60*60 # 30 days in seconds
-    )
-    logger.info(f"User {form_data.username} logged in successfully. Token issued.")
-    return response
+        # Set token as HttpOnly cookie
+        response = JSONResponse(content={"msg": "Login successful"})
+        response.set_cookie(
+            key="access_token",
+            value=token,
+            httponly=True,
+            secure=False,  # True if using HTTPS
+            samesite="Lax",
+            max_age=ACCESS_TOKEN_EXPIRE_DAYS*24*60*60 # 30 days in seconds
+        )
+        logger.info(f"User {form_data.username} logged in successfully. Token issued.")
+        return response
+    except HTTPException as e:
+        API_ERRORS.labels(endpoint=endpoint, method=method, status=e.status_code).inc()
+        logger.warning(f"Login failed for {form_data.username}: {e.detail}")
+        raise
 
 @app.get("/verify-session", dependencies=[Depends(verify_api_key)])
 def verify_session(user=Depends(get_current_user)):
@@ -249,100 +306,124 @@ async def predict(
     - Returns single prediction and probability.
     - Logs results as the production data
     """
-    logger.info(f"Prediction request received from user: {current_user['username']} ({current_user['role']})")
-    model = request.app.state.model
+    method = request.method
+    endpoint = request.url.path
+    start_time = time.perf_counter()
+    if not hasattr(request.app.state, "model"):
+        logger.warning("Prediction requested but no model is loaded.")
+        raise HTTPException(status_code=503, detail="Model not loaded. Please try again later.")
+    try:
+        logger.info(f"Prediction request received from user: {current_user['username']} ({current_user['role']})")
+        model = request.app.state.model
+        version = app.state.version_folder.split("/")[-1]
 
-    # ADMIN ROLE
-    if current_user["role"] == APP_USERS.get(2):
-        df = None
+        # ADMIN ROLE
+        if current_user["role"] == APP_USERS.get(2):
+            df = None
 
-        # CASE 1: File was uploaded
-        if file is not None:
-            logger.debug("CSV file uploaded for prediction.")
-            contents = await file.read()
-            await file.close()
-            df = pd.read_csv(StringIO(contents.decode("utf-8")))
+            # CASE 1: File was uploaded
+            if file is not None:
+                logger.debug("CSV file uploaded for prediction.")
+                contents = await file.read()
+                await file.close()
+                df = pd.read_csv(StringIO(contents.decode("utf-8")))
 
-        # CASE 2: JSON body
-        else:
+            # CASE 2: JSON body
+            else:
+                try:
+                    data = await request.json()
+                    if data:
+                        logger.debug("JSON input received for prediction.")
+                        df = pd.DataFrame([data])
+                except Exception:
+                    raise HTTPException(status_code=400, detail="Provide either a CSV file or JSON data.")
+
+            if df is None:
+                raise HTTPException(status_code=400, detail="Provide either file or JSON data.")
+
+            # Validate schema
+            try:
+                validate_schema(df, EXPECTED_COLUMNS[:-1])
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
+            
+            # Keep a copy of raw input for logging
+            raw_inputs = df.copy(deep=True).to_dict(orient="records")
+
+            df = df[EXPECTED_COLUMNS[:-1]]
+
+            preds, probs = model.predict(model_input=df, return_proba=True, both=True)
+            shap_values = model.explain_json(df)
+
+            results = df.copy()
+            results["prediction"] = preds
+            results["probability"] = probs
+
+            # Add background logging task
+            background_tasks.add_task(log_predictions_task, raw_inputs, preds,probs)
+
+            # Record Prometheus metrics
+            duration = time.perf_counter() - start_time
+            PREDICTION_COUNT.labels(model_name=MLFLOW_EXPERIMENT_NAME, version=version).inc()
+            PREDICTION_LATENCY.labels(model_name=MLFLOW_EXPERIMENT_NAME, version=version).observe(duration)
+
+            logger.info(f"Predictions generated for {len(df)} samples.")
+            return JSONResponse({
+                "role": APP_USERS.get(2),
+                "results": results.to_dict(orient="records"),
+                "shap_values": shap_values,
+            })
+
+        # AGENT ROLE
+        elif current_user["role"] == APP_USERS.get(1):
             try:
                 data = await request.json()
-                if data:
-                    logger.debug("JSON input received for prediction.")
-                    df = pd.DataFrame([data])
+                logger.debug("JSON input received for prediction.")
             except Exception:
-                raise HTTPException(status_code=400, detail="Provide either a CSV file or JSON data.")
+                raise HTTPException(status_code=400, detail="Agents must send JSON data only.")
 
-        if df is None:
-            raise HTTPException(status_code=400, detail="Provide either file or JSON data.")
+            if not data:
+                raise HTTPException(status_code=400, detail="Agents must send JSON data only.")
 
-        # Validate schema
-        try:
-            validate_schema(df, EXPECTED_COLUMNS[:-1])
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
-        
-        # Keep a copy of raw input for logging
-        raw_inputs = df.copy(deep=True).to_dict(orient="records")
+            df = pd.DataFrame([data])
 
-        df = df[EXPECTED_COLUMNS[:-1]]
+            # Validate schema
+            try:
+                validate_schema(df, EXPECTED_COLUMNS[:-1])
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
+            
+            # Keep a copy of raw input for logging
+            raw_inputs = df.copy(deep=True).to_dict(orient="records")
 
-        preds, probs = model.predict(model_input=df, return_proba=True, both=True)
-        shap_values = model.explain_json(df)
+            df = df[EXPECTED_COLUMNS[:-1]]
 
-        results = df.copy()
-        results["prediction"] = preds
-        results["probability"] = probs
+            preds, probs = model.predict(model_input=df, return_proba=True, both=True)
 
-        # Add background logging task
-        background_tasks.add_task(log_predictions_task, raw_inputs, preds,probs)
+            # Add background logging task
+            background_tasks.add_task(log_predictions_task, raw_inputs, preds,probs)
 
-        logger.info(f"Predictions generated for {len(df)} samples.")
-        return JSONResponse({
-            "role": APP_USERS.get(2),
-            "results": results.to_dict(orient="records"),
-            "shap_values": shap_values,
-        })
+            # Record Prometheus metrics
+            duration = time.perf_counter() - start_time
+            PREDICTION_COUNT.labels(model_name=MLFLOW_EXPERIMENT_NAME, version=version).inc()
+            PREDICTION_LATENCY.labels(model_name=MLFLOW_EXPERIMENT_NAME, version=version).observe(duration)
 
-    # AGENT ROLE
-    elif current_user["role"] == APP_USERS.get(1):
-        try:
-            data = await request.json()
-            logger.debug("JSON input received for prediction.")
-        except Exception:
-            raise HTTPException(status_code=400, detail="Agents must send JSON data only.")
+            logger.info(f"Predictions generated for {len(df)} samples.")
 
-        if not data:
-            raise HTTPException(status_code=400, detail="Agents must send JSON data only.")
+            return JSONResponse({
+                "role": APP_USERS.get(1),
+                "prediction": int(preds[0]),
+                "probability": float(probs[0]),
+            })
 
-        df = pd.DataFrame([data])
-
-        # Validate schema
-        try:
-            validate_schema(df, EXPECTED_COLUMNS[:-1])
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
-        
-        # Keep a copy of raw input for logging
-        raw_inputs = df.copy(deep=True).to_dict(orient="records")
-
-        df = df[EXPECTED_COLUMNS[:-1]]
-
-        preds, probs = model.predict(model_input=df, return_proba=True, both=True)
-
-        # Add background logging task
-        background_tasks.add_task(log_predictions_task, raw_inputs, preds,probs)
-
-        logger.info(f"Predictions generated for {len(df)} samples.")
-
-        return JSONResponse({
-            "role": APP_USERS.get(1),
-            "prediction": int(preds[0]),
-            "probability": float(probs[0]),
-        })
-
-    else:
-        raise HTTPException(status_code=403, detail="Unauthorized role.")
+        else:
+            raise HTTPException(status_code=403, detail="Unauthorized role.")
+    except HTTPException as e:
+        version = app.state.version_folder.split("/")[-1]
+        API_ERRORS.labels(endpoint=endpoint, method=method, status=e.status_code).inc()
+        PREDICTION_ERRORS.labels(model_name=MLFLOW_EXPERIMENT_NAME, version=version).inc()
+        logger.error(f"Prediction error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
     
 # 2. Feeedback Data (Only Admin)
 @limiter.limit("10/minute")
@@ -355,18 +436,25 @@ async def get_feedback_data(request: Request,limit: int = 50, payload: dict = De
     - Returns up to `limit` records (default = 50).
     - Useful for reviewing model decisions before giving feedback.
     """
-    logger.info("Admin requested feedback data retrieval.")
-    df = read_csv_safe(INFERENCE_DATA_PATH)
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No inference data found.")
-    
-    # Sort by timestamp and limit
-    df = df.sort_values("timestamp", ascending=False).head(limit)
-    records = df.to_dict(orient="records")
+    method = request.method
+    endpoint = request.url.path
+    try:
+        logger.info("Admin requested feedback data retrieval.")
+        df = read_csv_safe(INFERENCE_DATA_PATH)
+        if df.empty:
+            raise HTTPException(status_code=404, detail="No inference data found.")
+        
+        # Sort by timestamp and limit
+        df = df.sort_values("timestamp", ascending=False).head(limit)
+        records = df.to_dict(orient="records")
 
-    logger.debug(f"Returning top {limit} recent inference records.")
+        logger.debug(f"Returning top {limit} recent inference records.")
 
-    return records
+        return records
+    except HTTPException as e:
+        API_ERRORS.labels(endpoint=endpoint, method=method, status=e.status_code).inc()
+        logger.error(f"Feedback data retrieval failed: {e.detail}")
+        raise
 
 # 3. Feeedback(Human In The Loop) (Only Admin)
 @limiter.limit("10/minute")
@@ -379,6 +467,8 @@ async def feedback(request: Request,file: UploadFile = File(...),payload: dict =
     - Updates existing records (no duplicates).
     - Saves merged data back to inference data.
     """
+    method = request.method
+    endpoint = request.url.path
     logger.info("Admin uploading feedback data file.")
     logger.debug(f"Uploaded file: {file.filename}")
     try:
@@ -413,7 +503,9 @@ async def feedback(request: Request,file: UploadFile = File(...),payload: dict =
             "updated_records": len(updated_df)
         }
 
-    except Exception as e:
+    except HTTPException as e:
+        API_ERRORS.labels(endpoint=endpoint, method=method, status=e.status_code).inc()
+        logger.error(f"Feedback failed: {e.detail}")
         raise HTTPException(status_code=500, detail=f"Error processing feedback: {e}")
 
 # 4. Upload Data (Only Admin)
@@ -487,6 +579,9 @@ async def model_explainability(
     - Returns SHAP values (feature importance per sample).
     - Helps interpret model predictions and feature influence.
     """
+    if not hasattr(request.app.state, "model"):
+        logger.warning("Model explainability requested but no model is loaded.")
+        raise HTTPException(status_code=503, detail="Model not loaded. Please try again later.")
     logger.info("Explainability request received.")
 
     model = request.app.state.model
@@ -585,3 +680,48 @@ async def data_monitoring(request: Request, format: str = "html", window: int = 
         return HTMLResponse(content=report.get_html_str(False))
     logger.debug("Returning JSON report.")
     return JSONResponse(content=report.dict())
+
+# To be used by prometheus
+@app.get("/metrics")
+def metrics():
+    data = generate_latest(REGISTRY)
+    return Response(content=data, media_type=CONTENT_TYPE_LATEST)
+
+@app.post("/update_metrics",dependencies=[Depends(verify_api_key)])
+def update_metrics(data: dict):
+    """
+    Centralized Prometheus metrics ingestion endpoint.
+    Accepts JSON payloads from different monitoring subsystems:
+    - drift: updates data drift metrics
+    - pipeline_error: increments pipeline error counters
+    - model_decay: updates model performance metrics
+    """
+    # Drift Metrics
+    if data.get("from") == "drift":
+        model_name = data.get("model_name", "unknown_model")
+        drift_share = data.get("drift_share", 0.0)
+        drift_count = data.get("drift_count", 0)
+
+        DRIFT_SHARE_GAUGE.labels(model_name=model_name).set(drift_share)
+        DRIFT_COUNT_GAUGE.labels(model_name=model_name).set(drift_count)
+
+    # Pipeline Errors
+    elif data.get("from") == "pipeline_error":
+        pipeline_name = data.get("pipeline_name", "unknown_pipeline")
+        PIPELINE_ERROR_COUNTER.labels(pipeline_name=pipeline_name).inc()
+
+    # Model Decay Check
+    elif data.get("from") == "model_decay":
+        model_name = data.get("model_name", "unknown_model")
+        version = str(data.get("version", "0"))
+        model_type = data.get("model_type", "unknown_type")
+        metrics = data.get("metric", {})
+
+        # Update model performance gauges
+        MODEL_ACCURACY_GAUGE.labels(model_name=model_name, model_type=model_type, version=version).set(metrics["accuracy"])
+        MODEL_PRECISION_GAUGE.labels(model_name=model_name, model_type=model_type, version=version).set(metrics["precision"])
+        MODEL_RECALL_GAUGE.labels(model_name=model_name, model_type=model_type, version=version).set(metrics["recall"])
+        MODEL_ROC_AUC_GAUGE.labels(model_name=model_name, model_type=model_type, version=version).set(metrics["roc_auc"])
+        MODEL_F1_GAUGE.labels(model_name=model_name, model_type=model_type, version=version).set(metrics["f1"])
+
+    return {"status": "ok", "source": data.get("from")}

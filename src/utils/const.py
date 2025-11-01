@@ -9,6 +9,7 @@ USERS_DATA_DIR = "data/users"
 INFERENCE_DATA_DIR = "data/inference"
 MODEL_DIR = "data/models"
 PREPROCESSORS = "data/preprocessors"
+REPORTS_DIR = "data/reports"
 
 
 # File Names
@@ -19,6 +20,8 @@ users_file_name = "users.json"
 inference_file_name = "production_data.csv"
 label_encoders_file_name = "label_encoder.joblib"
 scaler_file_name = "scaler.joblib"
+data_drift_report_json = "data_drift_report.json"
+data_drift_report_html = "data_drift_report.html"
 
 # Expected Colums
 EXPECTED_COLUMNS = [
