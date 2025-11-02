@@ -23,6 +23,10 @@ jobs:
           script: |
             set -e
             cd /home/${{ secrets.AZURE_USER_2 }}/mlops_churn_prediction
+            echo "Starting Docker service if not running..."
+            sudo systemctl start docker || true
+            sudo systemctl enable docker || true
+
             echo "Pulling latest code"
             git pull origin main
 
@@ -52,9 +56,16 @@ jobs:
             command_timeout: 30m
             script: |
               set -e
+              echo "Starting Docker service if not running..."
+              sudo systemctl start docker || true
+              sudo systemctl enable docker || true
+
               cd /home/${{ secrets.AZURE_USER }}/mlops_churn_prediction
               echo "Pulling latest code"
               git pull origin main
+
+              echo "Building base container holding shared dependancies"
+              docker build -t ml-base:latest -f Dockerfile.base .
 
               echo "Building new containers"
               docker compose -f docker-compose-2.yml build
