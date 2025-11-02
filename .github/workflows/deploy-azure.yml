@@ -22,7 +22,6 @@ jobs:
           script: |
             set -e
             cd /home/${{ secrets.AZURE_USER }}/mlops_churn_prediction
-
             echo "Pulling latest code"
             git pull origin main
 
@@ -32,7 +31,7 @@ jobs:
             echo "Starting new containers"
             docker compose -f docker-compose.yml up -d --no-deps --build
 
-            echo "Cleaning old containers
+            echo "Cleaning old containers"
             docker image prune -af
 
             echo "Deployment complete"
