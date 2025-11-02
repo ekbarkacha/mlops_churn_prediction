@@ -10,3 +10,10 @@ mlartifacts/
 mlruns/
 mlflow/
 .dockerignore
+plugins
+airflow-webserver.pid
+webserver_config.py
+airflow.db
+airflow.cfg
+mlops-project-vm_key.pem
+notes.md
