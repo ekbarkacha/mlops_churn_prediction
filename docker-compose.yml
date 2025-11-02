@@ -13,7 +13,7 @@ services:
       volumes:
         - ./src:/app/src #For testing purposes Mount. When taking to production we should copy in docker
         - ./data:/app/data
-      depends_on:
+      #depends_on:
         #- mlflow
 
   airflow:
