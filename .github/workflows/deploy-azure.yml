@@ -19,6 +19,7 @@ jobs:
           host: ${{ secrets.AZURE_HOST }}
           username: ${{ secrets.AZURE_USER }}
           key: ${{ secrets.AZURE_SSH_KEY }}
+          timeout: 1800  # 30 minutes
           script: |
             set -e
             cd /home/${{ secrets.AZURE_USER }}/mlops_churn_prediction
