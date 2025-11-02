@@ -1,17 +1,11 @@
-FROM python:3.12-slim
+# Shared base image
+FROM ml-base:latest 
 
 # Create non-root user
 RUN useradd -m appuser
 
 # Set working directory
 WORKDIR /app
-
-# Copy requirements
-COPY requirements.txt .
-
-# Install dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install --upgrade pip
 
 # Copy the rest of the app
 #COPY app/ .
