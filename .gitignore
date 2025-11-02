@@ -16,4 +16,5 @@ webserver_config.py
 airflow.db
 airflow.cfg
 mlops-project-vm_key.pem
+mlops-project-vm_key_2.pem
 notes.md

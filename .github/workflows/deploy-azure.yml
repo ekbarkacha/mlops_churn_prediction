@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-  deploy:
+  deploy_one:
     runs-on: ubuntu-latest
 
     steps:
@@ -16,23 +16,53 @@ jobs:
       - name: Deploy to VM via SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.AZURE_HOST }}
-          username: ${{ secrets.AZURE_USER }}
-          key: ${{ secrets.AZURE_SSH_KEY }}
+          host: ${{ secrets.AZURE_HOST_2 }}
+          username: ${{ secrets.AZURE_USER_2 }}
+          key: ${{ secrets.AZURE_SSH_KEY_2 }}
           command_timeout: 30m
           script: |
             set -e
-            cd /home/${{ secrets.AZURE_USER }}/mlops_churn_prediction
+            cd /home/${{ secrets.AZURE_USER_2 }}/mlops_churn_prediction
             echo "Pulling latest code"
             git pull origin main
 
             echo "Building new containers"
-            docker compose -f docker-compose.yml build
+            docker compose -f docker-compose-1.yml build
 
             echo "Starting new containers"
-            docker compose -f docker-compose.yml up -d --no-deps --build
+            docker compose -f docker-compose-1.yml up -d --no-deps --build
 
             echo "Cleaning old containers"
             docker image prune -af
 
             echo "Deployment complete"
+  deploy_two:
+      runs-on: ubuntu-latest
+
+      steps:
+        - name: Checkout repo
+          uses: actions/checkout@v4
+
+        - name: Deploy to VM via SSH
+          uses: appleboy/ssh-action@v1.2.0
+          with:
+            host: ${{ secrets.AZURE_HOST }}
+            username: ${{ secrets.AZURE_USER }}
+            key: ${{ secrets.AZURE_SSH_KEY }}
+            command_timeout: 30m
+            script: |
+              set -e
+              cd /home/${{ secrets.AZURE_USER }}/mlops_churn_prediction
+              echo "Pulling latest code"
+              git pull origin main
+
+              echo "Building new containers"
+              docker compose -f docker-compose-2.yml build
+
+              echo "Starting new containers"
+              docker compose -f docker-compose-2.yml up -d --no-deps --build
+
+              echo "Cleaning old containers"
+              docker image prune -af
+
+              echo "Deployment complete"

@@ -16,7 +16,7 @@ RUN pip install --upgrade pip
 RUN chmod +x ./scripts/*.sh
 
 # Install Airflow
-RUN ./scripts/install.sh
+#RUN ./scripts/install.sh
 
 # Expose the webserver port
 EXPOSE 8080
