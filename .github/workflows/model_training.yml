@@ -1,0 +1,38 @@
+name: Train Model on Azure VM
+
+on:
+  
+  workflow_dispatch: # Triggered manually or by Airflow via GitHub API
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: SSH into Azure VM and train model
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AZURE_HOST }}
+          username: ${{ secrets.AZURE_USER }}
+          key: ${{ secrets.AZURE_SSH_KEY }}
+          script: |
+            set -e
+            cd /home/${{ secrets.AZURE_USER }}/mlops_churn_prediction
+
+            echo "Pulling latest code"
+            git pull origin main
+
+            echo "Activating environment"
+            source venv/bin/activate || python3 -m venv venv && source venv/bin/activate
+
+            echo "Installing dependencies"
+            pip install --upgrade pip
+            pip install -r requirements.txt
+
+            echo "Starting model training"
+            python /home/${{ secrets.AZURE_USER }}/mlops_churn_prediction/src/modeling/model_training.py
+
+            echo "Training completed"

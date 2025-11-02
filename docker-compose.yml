@@ -1,6 +1,8 @@
 services:
   fastapi:
-      image: ekbarkacha/fastapi:latest
+      build:
+        context: .
+        dockerfile: Dockerfile.fastapi
       container_name: fastapi
       env_file:
         - .env
@@ -32,7 +34,27 @@ services:
       --host 0.0.0.0
       --port 5000
       --allowed-hosts "*"
-
+  airflow:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: airflow
+    env_file:
+      - .env
+    environment:
+      - RUNNING_IN_DOCKER=1
+      - AIRFLOW_HOME=/opt/airflow/airflow
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./airflow:/opt/airflow/airflow
+      - ./airflow/dags:/opt/airflow/airflow/dags
+      - ./airflow/logs:/opt/airflow/airflow/logs
+      - ./airflow/plugins:/opt/airflow/airflow/plugins
+      - ./src:/opt/airflow/src #For testing purposes Mount. When taking to production we should copy in docker
+      - ./data:/opt/airflow/data
+    restart: always
+    command: bash /opt/airflow/scripts/entrypoint.sh
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
