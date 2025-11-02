@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-IP_ADDRESS = os.getenv("IP_ADDRESS")
+PRO_TARGET_ADDRESS = os.getenv("PRO_TARGET_ADDRESS")
 API_KEY = os.getenv("API_KEY")
 
 #### FOR THE DATA DRIFT CHECKER PART ###
@@ -109,7 +109,7 @@ API_LATENCY = Histogram(
 )
 
 def push_metrics_to_fastapi(payload:dict):
-    url = f"{IP_ADDRESS}/update_metrics" 
+    url = f"http://{PRO_TARGET_ADDRESS}/update_metrics" 
     headers = {"x-api-key": API_KEY} 
     try:
         requests.post(url=url,headers=headers,json=payload)
