@@ -1,14 +1,211 @@
-.DS_Store
-data/*.csv
+# ============================================================================
+# CUSTOMER CHURN PREDICTION - .gitignore (Production-Ready)
+# ============================================================================
+
+# ============================================================================
+# PYTHON
+# ============================================================================
 __pycache__/
-*.pyc
-.vscode/
-.ipynb_checkpoints
-.env
-logs/
-mlruns/
-*.sqlite
-*.log
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+
+# Virtual Environments
+venv/
+env/
+ENV/
 .venv/
-artifacts/
-models/
+.env/
+
+# ============================================================================
+# DATA (Keep structure, ignore large files)
+# ============================================================================
+# Raw data (large file - download from Kaggle)
+data/raw/*.csv
+!data/raw/.gitkeep
+
+# Processed data (large file - generated)
+data/processed/*.csv
+!data/processed/.gitkeep
+
+# Features (large file - generated)
+data/features/*.csv
+!data/features/.gitkeep
+!data/features/selected_features_list.txt
+
+# Interim data (if used)
+data/interim/
+!data/interim/.gitkeep
+
+# ============================================================================
+# MODELS & ARTIFACTS
+# ============================================================================
+# Artifacts (preprocessors - KEEP for production)
+# These are small and essential for deployment
+# artifacts/preprocessors/*.pkl  # Uncomment to ignore
+
+# Large model files (if saved locally)
+artifacts/models/*.h5
+artifacts/models/*.pt
+artifacts/models/*.pth
+artifacts/models/*.ckpt
+!artifacts/models/.gitkeep
+
+# ============================================================================
+# MLFLOW
+# ============================================================================
+# MLflow runs (Keep BEST run, ignore others)
+mlruns/*
+!mlruns/.gitkeep
+!mlruns/0/  # Experiment 0
+mlruns/0/*
+!mlruns/0/meta.yaml
+
+# Keep the best run (PRODUCTION MODEL)
+# Uncomment and update with your best run ID:
+# !mlruns/0/34e2a57ef6104819aa049946fb8cca2d/
+
+# MLflow artifacts (usually large)
+mlartifacts/
+!mlartifacts/.gitkeep
+
+# MLflow tracking database (optional - small file)
+# mlflow.db
+
+# ============================================================================
+# LOGS
+# ============================================================================
+logs/*.log
+logs/*.out
+logs/*.err
+*.log
+!logs/.gitkeep
+
+# ============================================================================
+# TESTING
+# ============================================================================
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+.tox/
+
+# ============================================================================
+# JUPYTER NOTEBOOKS
+# ============================================================================
+.ipynb_checkpoints/
+notebooks/*.ipynb  # Uncomment to ignore all notebooks
+!notebooks/example_*.ipynb  # Keep example notebooks
+
+# ============================================================================
+# ENVIRONMENT & SECRETS
+# ============================================================================
+.env
+.env.local
+.env.*.local
+kaggle.json
+*.key
+*.pem
+secrets/
+
+# ============================================================================
+# IDE & EDITORS
+# ============================================================================
+# VSCode
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# PyCharm
+.idea/
+*.iml
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# ============================================================================
+# OPERATING SYSTEM
+# ============================================================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+.Trash-*
+
+# ============================================================================
+# DOCUMENTATION
+# ============================================================================
+docs/_build/
+site/
+
+# ============================================================================
+# TEMPORARY FILES
+# ============================================================================
+*.tmp
+*.temp
+*.bak
+*.backup
+*~
+
+# ============================================================================
+# DEPLOYMENT (optional - depends on strategy)
+# ============================================================================
+# Docker
+# .dockerignore  # Keep this
+# docker-compose.override.yml
+
+# Kubernetes
+# k8s/secrets/
+
+# Archive (old experiments)
+archive/
+
+# ============================================================================
+# PROJECT-SPECIFIC
+# ============================================================================
+# Cleanup script outputs
+cleanup_report.txt
+
+# Large download files
+*.zip
+*.tar.gz
+*.rar
+
+# Experimental notebooks (not for production)
+notebooks/experiments/
+notebooks/scratch/
+
+###
+# Ajouter au .gitignore
+echo "" >> .gitignore
+echo "# Personal notes" >> .gitignore
+echo "sheet.md" >> .gitignore
