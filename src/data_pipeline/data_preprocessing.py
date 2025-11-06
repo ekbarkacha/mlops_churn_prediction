@@ -1,11 +1,32 @@
+"""
+Module: data_preprocessing.py
+==============================
+
+Author: AIMS-AMMI STUDENT 
+Created: October/November 2025  
+Description: 
+------------
+This module provides a complete data preprocessing pipeline for a dataset, including:
+- Data ingestion (from local CSV or Kaggle) imported from data_ingestion.py
+- Data cleaning (handling missing and invalid values)
+- Data encoding (label encoding categorical variables)
+- Schema validation
+- Column categorization (categorical, numerical, cardinal)
+- Saving processed data and optional DVC tracking
+
+"""
+# Imports and setup
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 import joblib
 import pandas as pd
+import threading
 from sklearn.preprocessing import LabelEncoder
 
+# Custom utility imports
 from src.utils.logger import get_logger
+from src.data_pipeline.data_versioning_dvc import dvc_track_processed_file
 from src.data_pipeline.data_ingestion import ingest_from_kaggle,ingest_from_csv
 from src.utils.const import (KAGGLE_DATASET,EXPECTED_COLUMNS,RAW_DATA_DIR,
                              PROCESSED_DATA_DIR,raw_file_name,processed_file_name,
@@ -146,6 +167,21 @@ def grab_col_names(df: pd.DataFrame, cat_th=10, car_th=20):
         raise RuntimeError(f"Column extraction failed: {e}")
     
 def data_processing_pipeline(save=False):
+    """
+    Run the complete data preprocessing pipeline:
+    - Check and ingest raw data
+    - Validate schema
+    - Clean data
+    - Encode categorical variables
+    - Save processed data
+    - Optionally track processed file using DVC
+
+    Args:
+        save (bool, optional): Whether to save encoders and track processed file. Defaults to False.
+
+    Returns:
+        str: Path to the processed CSV file.
+    """
     logger.info("Starting data preprocessing...")
     RAW_DATA_PATH = f"{RAW_DATA_DIR}/{raw_file_name}"
     
@@ -174,6 +210,11 @@ def data_processing_pipeline(save=False):
     logger.info(f"Processed data saved to {PROCESSED_PATH} ({df.shape[0]} rows)")
 
     logger.info("Data preprocessing completed..")
+
+    if save:
+        # Run DVC tracking in a background thread
+        threading.Thread(target=dvc_track_processed_file, args=(logger, RAW_DATA_PATH), daemon=True).start()
+
 
     return PROCESSED_PATH
 

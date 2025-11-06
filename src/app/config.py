@@ -1,3 +1,22 @@
+"""
+Module: config.py
+=================
+
+Author: AIMS-AMMI STUDENT 
+Created: October/November 2025  
+Description: 
+------------
+Application configuration and environment variables loader.
+
+This module handles:
+- Loading environment variables from a .env file.
+- FastAPI configuration (secret keys, algorithm, API keys, token expiration).
+- File path configuration for raw, processed, user, and inference data.
+- MLflow experiment tracking URI configuration.
+- Default application user roles.
+
+The configuration values are centralized for consistent use across the project.
+"""
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
@@ -17,6 +36,7 @@ load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
 API_KEY = os.getenv("API_KEY")
+ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 ACCESS_TOKEN_EXPIRE_DAYS = int(os.getenv("ACCESS_TOKEN_EXPIRE_DAYS", 30))
 
 # Setup Mlflow uri (note its aslo in src/utils/config)

@@ -1,3 +1,21 @@
+"""
+Module: const.py 
+=======================
+
+Author: AIMS-AMMI STUDENT 
+Created: October/November 2025  
+Description: 
+------------
+This module defines **static constants** used across the entire MLOps project.
+It helps maintain consistency in dataset paths, filenames, MLflow experiment names, 
+and expected schema definitions etc.  
+
+By centralizing constants, we:
+- Avoid hardcoded strings across multiple scripts.
+- Ensure that all modules (Airflow DAGs, FastAPI, training, monitoring) 
+  use the same configuration.
+- Simplify updates to dataset or directory structures.
+"""
 #Kaggle Dataset
 KAGGLE_DATASET="blastchar/telco-customer-churn"
 
