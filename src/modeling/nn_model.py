@@ -1,10 +1,33 @@
+"""
+Module: nn_model.py 
+=======================
+
+Author: AIMS-AMMI STUDENT 
+Created: October/November 2025  
+Description: 
+------------
+This module defines a simple feed-forward neural network built using **PyTorch**, 
+along with a custom **MLflow PyFunc wrapper** for model serving and deployment.
+
+It includes:
+- `NN`: A fully connected neural network for binary classification tasks.
+- `PyTorchWrapper`: A class that integrates the PyTorch model with MLflow’s 
+  PyFunc API, allowing inference from a Pandas DataFrame in production environments.
+
+Key Features:
+-------------
+- Compatible with MLflow model registry and deployment workflows.
+- Provides both class predictions (`predict`) and probability scores (`predict_proba`).
+- Automatically applies a sigmoid activation for binary outputs.
+"""
+# Imports
 import numpy as np
 import mlflow
 import pandas as pd
 import torch
 import torch.nn as nn
 
-# Neural Net Model
+# Neural Network Model
 class NN(nn.Module):
     def __init__(self, input_dim, hidden_units):
         super(NN, self).__init__()
@@ -21,15 +44,7 @@ class NN(nn.Module):
 class PyTorchWrapper(mlflow.pyfunc.PythonModel):
     def __init__(self, model: torch.nn.Module, device=None, threshold=0.5):
         self.model = model
-
-        if device:
-            self.device = device
-        elif torch.backends.mps.is_available():
-            self.device = torch.device("mps")
-        elif torch.cuda.is_available():
-            self.device = torch.device("cuda")
-        else:
-            self.device = torch.device("cpu")
+        self.device = torch.device("cpu")
 
         self.threshold = threshold
         self.model.to(self.device)

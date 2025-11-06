@@ -1,3 +1,26 @@
+"""
+Module: model_wrapper.py
+========================
+
+Author: AIMS-AMMI STUDENT 
+Created: October/November 2025  
+Description: 
+------------
+Universal MLflow Model Wrapper for multiple ML frameworks.
+
+This module provides the `UniversalMLflowWrapper` class which standardizes prediction,
+probability estimation, and explainability across different types of machine learning models:
+- Scikit-learn
+- XGBoost
+- PyTorch Neural Networks
+
+Key Features:
+- Unified API for `predict`, `predict_proba`, and SHAP-based `explain`.
+- Automatic preprocessing (encoding, scaling, feature selection) using stored preprocessors.
+- Automatic device management for PyTorch models (CPU, CUDA, MPS).
+- SHAP explainability initialization and caching.
+"""
+# Imports and setup
 import mlflow.pyfunc
 import torch
 import pandas as pd
@@ -7,6 +30,7 @@ import xgboost as xgb
 import shap
 import os
 import joblib
+# Custom utility import
 from src.utils.const import scaler_file_name,label_encoders_file_name
 
 class UniversalMLflowWrapper(mlflow.pyfunc.PythonModel):

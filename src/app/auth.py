@@ -1,10 +1,29 @@
+"""
+Module: auth.py
+===============
+
+Author: AIMS-AMMI STUDENT 
+Created: October/November 2025  
+Description: 
+------------
+Authentication and authorization utilities for the FastAPI application.
+
+This module handles:
+- Password hashing and verification using pwdlib.
+- JWT access token creation and decoding.
+- Role-based access control for endpoints.
+- API key verification.
+- CORS middleware setup for frontend requests.
+
+Provides reusable security functions to integrate with FastAPI routes.
+"""
 import jwt
 from pwdlib import PasswordHash
 from fastapi import HTTPException, Cookie,Header
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timedelta, timezone
 from src.app.utils import load_users
-from src.app.config import SECRET_KEY,ALGORITHM,API_KEY,APP_USERS
+from src.app.config import SECRET_KEY,ALGORITHM,API_KEY,ADMIN_API_KEY,APP_USERS
 
 pwd_context = PasswordHash.recommended()
 
@@ -63,5 +82,6 @@ def require_role(required_role: str):
 def verify_api_key(x_api_key: str = Header(...)):
     if x_api_key != API_KEY:
         raise HTTPException(status_code=403, detail="Invalid API Key")
-    
-
+def verify_api2_key(x_api_key: str = Header(...)):
+    if x_api_key != ADMIN_API_KEY:
+        raise HTTPException(status_code=403, detail="Invalid API Key")

@@ -1,0 +1,4 @@
+[core]
+    remote = supabase
+['remote "supabase"']
+    url = s3://mlops-dvc-store

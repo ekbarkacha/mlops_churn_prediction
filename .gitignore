@@ -4,8 +4,9 @@ __pycache__/
 .env
 venv
 logs/
-.dvc
-data/
+data/*
+!data/raw/
+!data/raw/*.dvc
 mlartifacts/
 mlruns/
 mlflow/

@@ -1,3 +1,23 @@
+"""
+Module: model_training.py
+=======================
+
+Author: AIMS-AMMI STUDENT 
+Created: October/November 2025  
+Description: 
+------------
+This module handles the full model training workflow for customer churn prediction.
+It supports:
+  - Data preparation and balancing (via SMOTE)
+  - Model training for Random Forest, XGBoost and Neural Network
+  - Hyperparameter tuning (Grid/Random Search)
+  - Evaluation and MLflow logging
+  - Model registration and promotion to  production/staging
+
+Models tracked via MLflow are automatically wrapped with `mlflow.pyfunc.PythonModel`
+for consistent deployment and scoring through FastAPI.
+"""
+# Imports and setup
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
@@ -14,9 +34,11 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
+
+# Custom utility imports
 from src.data_pipeline.data_preprocessing import data_processing_pipeline
 from src.data_pipeline.feature_engineering import feature_engineering_pipeline
-from src.modeling.model_utils import split_data, evaluate_model, save_model, log_metrics_to_mlflow,WrappedModel
+from src.modeling.model_utils import set_model_stage,split_data, evaluate_model, log_metrics_to_mlflow,WrappedModel
 from src.utils.logger import get_logger
 from src.utils.config import MLFLOW_TRACKING_URI
 from src.utils.const import (MLFLOW_EXPERIMENT_NAME,
@@ -25,25 +47,34 @@ from src.utils.const import (MLFLOW_EXPERIMENT_NAME,
                              processed_file_name,
                              feature_file_name,PREPROCESSORS)
 from src.modeling.nn_model import NN,PyTorchWrapper
-import json
-from pathlib import Path
 
 logger = get_logger(__name__)
 
-# Load Config
+# Load training configuration
 with open("src/modeling/model_config.yaml", "r") as f:
     config = yaml.safe_load(f)
 
+# Model Tuning and Logging
 def tune_and_log_model(model_cls, model_name, X_train, y_train, X_test, y_test, params, all_metrics, log_model_func):
     """
-    This function if for hyperparameter tuning and MLflow logging.
-    It also supports GridSearchCV and RandomizedSearchCV.
+    Train, tune, evaluate, and log a model to MLflow.
+
+    Supports both GridSearchCV and RandomizedSearchCV.
+
+    Args:
+        model_cls: Model class (e.g., RandomForestClassifier, XGBClassifier).
+        model_name (str): Descriptive model name for MLflow run.
+        X_train, y_train, X_test, y_test: Train/test splits.
+        params (dict): Model configuration including tuning parameters.
+        all_metrics (dict): Dictionary to store performance results.
+        log_model_func (callable): Callback to log the trained model to MLflow.
     """
     with mlflow.start_run(run_name=model_name):
         base_params = {k: v for k, v in params.items() if k != "tuning"}
         model = model_cls(**base_params)
         tuning_cfg = params.get("tuning", {})
 
+        # Hyperparameter tuning
         if tuning_cfg.get("enabled", False):
             search_type = tuning_cfg.get("search_type", "grid")
             param_grid = tuning_cfg["param_grid"]
@@ -62,15 +93,13 @@ def tune_and_log_model(model_cls, model_name, X_train, y_train, X_test, y_test, 
             best_model = model
             mlflow.log_params(base_params)
 
-        # Evaluate
+        # Evaluation
         preds = best_model.predict(X_test)
         metrics = evaluate_model(y_test, preds,best_model.predict_proba(X_test)[:, 1])
         all_metrics[model_name] = metrics
         log_metrics_to_mlflow(metrics)
 
-        # Save & log model
-        # model_path = save_model(best_model, f"{MODEL_ARTIFACTS_PATH}/{model_name.lower()}.joblib")
-        # mlflow.log_artifact(model_path)
+        # Log model and preprocessing artifacts
         log_model_func(best_model)
         for file_name in os.listdir(PREPROCESSORS):
             artifact_path = os.path.join(PREPROCESSORS, file_name)
@@ -78,13 +107,22 @@ def tune_and_log_model(model_cls, model_name, X_train, y_train, X_test, y_test, 
 
         logger.info(f"{model_name} Metrics: {metrics}")
 
-
+# Train All Models
 def train_all_models(df: pd.DataFrame):
+    """
+    Trains Random Forest, XGBoost, and Neural Network models, 
+    logs their metrics and models to MLflow.
+
+    Args:
+        df (pd.DataFrame): Processed dataset ready for training.
+    """
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
     all_metrics = {}
 
     logger.info("Loading processed data...")
+
+    # Data preparation
     X_train, X_test, y_train, y_test = split_data(df,test_size=0.2)
     over = SMOTE(random_state=2)
     X_train, y_train = over.fit_resample(X_train, y_train)
@@ -117,7 +155,7 @@ def train_all_models(df: pd.DataFrame):
             input_example=input_example) # Wrapped as pyfunc
     )
 
-    # Neural Network
+    # Neural Network (PyTorch)
     nn_cfg = config["neural_net"]
     tuning_cfg = nn_cfg.get("tuning", {})
     best_metrics = None
@@ -133,6 +171,7 @@ def train_all_models(df: pd.DataFrame):
                     input_dim = X_train.shape[1]
                     model = NN(input_dim, hu)
 
+                    # Use MPS/GPU if available
                     if torch.backends.mps.is_available():
                         device = torch.device("mps")
                     elif torch.cuda.is_available():
@@ -152,7 +191,7 @@ def train_all_models(df: pd.DataFrame):
                         TensorDataset(X_train_t, y_train_t),
                         batch_size=bs, shuffle=True
                     )
-
+                    # Training loop
                     for epoch in range(nn_cfg["epochs"]):
                         model.train()
                         epoch_loss = 0.0
@@ -165,7 +204,7 @@ def train_all_models(df: pd.DataFrame):
                             optimizer.step()
                             epoch_loss += loss.item()
 
-                    # Evaluate
+                    # Evaluation
                     model.eval()
                     with torch.no_grad():
                         logits = model(X_test_t.to(device))
@@ -177,12 +216,10 @@ def train_all_models(df: pd.DataFrame):
                         best_metrics = metrics
                         best_params = {"hidden_units": hu, "lr": lr, "batch_size": bs}
                         best_model = model
-
+        # Log best model
         mlflow.log_params(best_params)
         log_metrics_to_mlflow(best_metrics)
         all_metrics["neural_net"] = best_metrics
-        # torch.save(best_model.state_dict(), f"{MODEL_ARTIFACTS_PATH}/neural_net.pt")
-        # mlflow.log_artifact(f"{MODEL_ARTIFACTS_PATH}/neural_net.pt")
         mlflow.pyfunc.log_model(python_model=PyTorchWrapper(
             best_model.to("cpu")),
             name="model",
@@ -192,17 +229,14 @@ def train_all_models(df: pd.DataFrame):
             artifact_path = os.path.join(PREPROCESSORS, file_name)
             mlflow.log_artifact(artifact_path, artifact_path="preprocessors")
 
-    # # Save all metrics
-    # Path(MODEL_ARTIFACTS_PATH).mkdir(exist_ok=True)
-    # with open(f"{MODEL_ARTIFACTS_PATH}/metrics.json", "w") as f:
-    #     json.dump(all_metrics, f, indent=4)
-
     logger.info(f"Training complete. Check MLflow UI for experiment results. {MLFLOW_TRACKING_URI}")
-    print(f"Training complete. Check MLflow UI for experiment results. {MLFLOW_TRACKING_URI}")
-
 
 
 def register_best_model():
+    """
+    Retrieves the best-performing run from MLflow (based on F1 score),
+    registers it to the model registry, and promotes it to the appropriate stage.
+    """
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     
     client = MlflowClient(tracking_uri=MLFLOW_TRACKING_URI)
@@ -223,8 +257,16 @@ def register_best_model():
 
     model_uri = f"runs:/{best_run.info.run_id}/model"
     registered_model = mlflow.register_model(model_uri, MLFLOW_EXPERIMENT_NAME)
-    logger.info(f"Registered model version: {registered_model.version}")
+    
+    # Automatically promote the first model to Production, others to Staging
+    stage = "Production"
+    if(int(registered_model.version)>1):
+        stage="Staging"
+    set_model_stage(logger,MLFLOW_TRACKING_URI,MLFLOW_EXPERIMENT_NAME,registered_model.version,stage,reload=True)
 
+    logger.info(f"Registered model version: {registered_model.version} and taken to {stage} stage.")
+
+# Entry Point
 if __name__ == "__main__":
     processed_data_path = data_processing_pipeline(save=True)
     df = feature_engineering_pipeline(processed_data_path,save=True)

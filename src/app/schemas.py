@@ -1,10 +1,28 @@
+"""
+Module: schemas.py
+==================
+
+Author: AIMS-AMMI STUDENT 
+Created: October/November 2025  
+Description: 
+------------
+Pydantic schemas for the FastAPI churn prediction application.
+
+Includes:
+- User schema for authentication and authorization.
+- CustomerInput schema for API requests related to customer churn prediction.
+
+"""
+# Imports
 from pydantic import BaseModel
 from src.app.config import APP_USERS
+from typing import Optional
 
 class User(BaseModel):
     username: str
     password: str
     role: str = APP_USERS.get(1)
+    approved: Optional[bool] = False
 
 class CustomerInput(BaseModel):
     customerID: str
