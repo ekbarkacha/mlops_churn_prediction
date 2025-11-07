@@ -132,3 +132,148 @@ Example Endpoint:
 ```bash
 POST /predict
 Content-Type: application/json
+```
+##  Monitoring & Observability
+
+Monitoring is a key component of this MLOps pipeline, ensuring that the deployed model continues to perform as expected and that any degradation or data drift is detected early.
+
+**Tools Used:**
+- **Prometheus** → Collects key performance metrics such as latency, throughput, and error rates.  
+- **Grafana** → Provides real-time dashboards for visualizing API and model metrics.  
+- **Apache Airflow** → Automates periodic checks for data drift and model decay.
+
+**Monitoring Scripts:**
+- `check_data_drift.py` → Compares feature distributions between training and current data to detect drift.  
+- `check_model_decay.py` → Evaluates model performance over time and flags degradation.  
+- `check_canary.py` → Validates canary deployments before full rollout.
+
+**Configuration File:**
+- `prometheus.yml` → Defines metric scraping targets and alerting rules.
+
+**Key Metrics Monitored:**
+- API latency and uptime  
+- Prediction accuracy and error rates  
+- Feature drift statistics  
+- Model performance trends over time
+
+When a threshold breach or anomaly is detected, alerts are triggered to notify maintainers and optionally **initiate retraining pipelines**.
+
+##  Security & Compliance
+
+Security and compliance are integrated across all components of the MLOps system to protect customer data and ensure responsible model usage.
+
+**Authentication & Authorization:**
+- Implemented using **JWT-based tokens** via the `auth.py` module.
+- **Role-Based Access Control (RBAC)** ensures only authorized users can access specific endpoints.
+
+**Data Privacy:**
+- Sensitive customer identifiers are **anonymized** before storage and model training.
+- No raw personally identifiable information (PII) is exposed through the API or logs.
+
+**Audit & Logging:**
+- Every API request is logged through `utils/logger.py` for traceability.
+- Access and activity logs are stored securely and periodically reviewed.
+
+**Infrastructure Security:**
+- All services are containerized via Docker, isolating runtime environments.
+- Network-level access is restricted to trusted hosts within the Azure deployment.
+
+**Compliance Alignment:**
+- The system follows **GDPR-compliant** data handling practices.
+- Access policies and monitoring align with standard **Azure security guidelines**.
+
+---
+## Repository Structure
+```bash
+
+├── Dockerfile.airflow
+├── Dockerfile.base
+├── Dockerfile.fastapi
+├── README.md
+├── airflow
+│   └── dags
+│       ├── canary_deployment.py
+│       └── model_decay_data_drift.py
+├── data
+│   ├── logs
+│   │   ├── LOGS_20251103.log
+│   │   └── LOGS_20251104.log
+│   ├── models
+│   │   └── scaler.joblib
+│   ├── preprocessors
+│   │   └── label_encoder.joblib
+│   ├── processed
+│   │   ├── customers_cleaned.csv
+│   │   └── customers_features.csv
+│   └── raw
+│       ├── WA_Fn-UseC_-Telco-Customer-Churn.csv
+│       └── WA_Fn-UseC_-Telco-Customer-Churn.csv.dvc
+├── docker-compose-1.yml
+├── docker-compose-2.yml
+├── docs
+│   └── Product_Design.pdf
+├── images
+│   └── system_design_flow_diagram.png
+├── prometheus.yml
+├── requirements.txt
+├── scripts
+│   ├── entrypoint.sh
+│   └── install.sh
+├── src
+│   ├── app
+│   │   ├── auth.py
+│   │   ├── config.py
+│   │   ├── main.py
+│   │   ├── model_wrapper.py
+│   │   ├── schemas.py
+│   │   └── utils.py
+│   ├── data_pipeline
+│   │   ├── __init__.py
+│   │   ├── __pycache__
+│   │   │   ├── __init__.cpython-312.pyc
+│   │   │   └── data_ingestion.cpython-312.pyc
+│   │   ├── data_ingestion.py
+│   │   ├── data_preprocessing.py
+│   │   ├── data_versioning_dvc.py
+│   │   └── feature_engineering.py
+│   ├── modeling
+│   │   ├── __init__.py
+│   │   ├── model_config.yaml
+│   │   ├── model_training.py
+│   │   ├── model_utils.py
+│   │   └── nn_model.py
+│   ├── monitoring
+│   │   ├── check_canary.py
+│   │   ├── check_data_drift.py
+│   │   ├── check_model_decay.py
+│   │   └── metrics.py
+│   └── utils
+│       ├── __init__.py
+│       ├── __pycache__
+│       │   ├── __init__.cpython-312.pyc
+│       │   ├── config.cpython-312.pyc
+│       │   ├── const.cpython-312.pyc
+│       │   └── logger.cpython-312.pyc
+│       ├── config.py
+│       ├── const.py
+│       └── logger.py
+├── test
+│   └── test_data_pipeline.py
+└── venv
+    └── include
+        └── python3.12
+```
+
+## 📚 References
+
+- [Kaggle Telco Customer Churn Dataset](https://www.kaggle.com/datasets/blastchar/telco-customer-churn)  
+- [MLflow Documentation](https://mlflow.org/docs/latest/index.html)  
+- [FastAPI Official Documentation](https://fastapi.tiangolo.com/)  
+- [Apache Airflow Documentation](https://airflow.apache.org/docs/)  
+- [Prometheus Monitoring](https://prometheus.io/docs/introduction/overview/)  
+- [Grafana Dashboards](https://grafana.com/docs/grafana/latest/)  
+- [DVC (Data Version Control)](https://dvc.org/doc)  
+- [Azure Machine Learning Deployment Guide](https://learn.microsoft.com/en-us/azure/machine-learning/)  
+
+
+
