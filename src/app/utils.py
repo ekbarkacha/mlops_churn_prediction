@@ -209,7 +209,6 @@ class InferenceDatapreprocer():
     def data_cleaning(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy(deep=True)
         # Cleaning
-        df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce').fillna(0)
         # Convert TotalCharges to numeric, coercing invalid values to NaN
         df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
 
