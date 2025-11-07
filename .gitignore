@@ -2,7 +2,7 @@
 __pycache__/
 .pytest_cache
 .env
-venv
+.venv/
 logs/
 data/*
 !data/raw/
@@ -19,3 +19,5 @@ airflow.cfg
 mlops-project-vm_key.pem
 mlops-project-vm_key_2.pem
 notes.md
+
+mlflow.db
