@@ -38,7 +38,7 @@ The overall architecture consists of multiple interconnected components supporti
 | Category | Tools / Frameworks |
 |-----------|--------------------|
 | **Language** | Python 3.12 |
-| **ML Libraries** | Scikit-learn, XGBoost, Joblib |
+| **ML Libraries** | Scikit-learn, XGBoost, Joblib, etc |
 | **Experiment Tracking** | MLflow |
 | **Data Versioning** | DVC |
 | **API Framework** | FastAPI |
