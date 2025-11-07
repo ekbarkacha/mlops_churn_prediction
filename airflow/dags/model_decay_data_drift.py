@@ -365,7 +365,7 @@ def trigger_github_workflow_training(**context):
 with DAG(
     dag_id="customer_churn_drift_pipeline",
     default_args=default_args,
-    schedule_interval=None,
+    schedule_interval="0 0 * * *",## 00:00 (midnight UTC)
     start_date=days_ago(1),
     catchup=False,
     tags=['data drift','training',"github trigger"],
@@ -462,7 +462,7 @@ with DAG(
 with DAG(
     dag_id="customer_churn_model_decay",
     default_args=default_args,
-    schedule_interval=None,
+    schedule_interval="0 1 * * *",## 01:00 am
     start_date=days_ago(1),
     catchup=False,
     tags=['model decay','training',"github trigger"],
