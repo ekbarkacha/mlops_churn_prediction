@@ -59,7 +59,7 @@ SET_CANARY_ENDPOINT = f"{FASTAPI_URL}/set_canary_percentage"
 
 # Canary rollout configuration
 CANARY_STEPS = [0.05, 0.25, 1.0]
-WAIT_BETWEEN_STEPS = timedelta(seconds=5)
+WAIT_BETWEEN_STEPS = timedelta(hours=6)
 
 # Default Airflow arguments
 default_args = {"owner": "mlops_team"}
@@ -134,7 +134,7 @@ with DAG(
     dag_id="canary_deployment_pipeline",
     default_args=default_args,
     description="Incremental canary rollout with evaluation and auto-promotion",
-    schedule_interval=None,
+    schedule_interval="0 2 * * *",## 02:00 am,
     start_date=datetime(2025, 11, 4),
     catchup=False,
     tags=["canary", "deployment"],
