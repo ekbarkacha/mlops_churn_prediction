@@ -1,4 +1,20 @@
 services:
+  gradio-app:
+      build:
+        context: .
+        dockerfile: Dockerfile.frontend
+      container_name: gradio-app
+      ports:
+        - "7862:7862"
+      env_file:
+        - .env
+      environment:
+        MLFLOW_URL: http://mlflow:5000
+        GRAFANA_URL: http://grafana:3030
+      restart: always
+      depends_on:
+        - mlflow
+        - grafana
   mlflow:
     image: ghcr.io/mlflow/mlflow:v3.5.1
     container_name: mlflow

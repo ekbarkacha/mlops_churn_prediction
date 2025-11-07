@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+pwdlib[argon2]
+pyjwt
+pydantic
+gradio
+requests
+scikit-learn
+bs4
+matplotlib
+shap
+seaborn
