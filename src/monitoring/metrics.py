@@ -36,7 +36,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-PRO_TARGET_ADDRESS = os.getenv("PRO_TARGET_ADDRESS")
+if os.getenv("RUNNING_IN_DOCKER"):
+    PRO_TARGET_ADDRESS = os.getenv("PRO_TARGET_ADDRESS")
+else:
+    PRO_TARGET_ADDRESS = os.getenv("PRO_TARGET_ADDRESS_LOCAL")
+
 API_KEY = os.getenv("API_KEY")
 
 #### FOR THE DATA DRIFT CHECKER PART ###

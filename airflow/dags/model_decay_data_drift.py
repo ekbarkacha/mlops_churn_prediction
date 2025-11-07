@@ -50,7 +50,7 @@ from dotenv import load_dotenv
 
 # Custom utility imports
 from src.utils.const import EXPECTED_COLUMNS,RAW_DATA_DIR,raw_file_name,INFERENCE_DATA_DIR,inference_file_name,MLFLOW_EXPERIMENT_NAME
-from src.utils.config import MODEL_THRESHOLD, MLFLOW_TRACKING_URI
+from src.utils.config import MODEL_THRESHOLD, MLFLOW_TRACKING_URI,DRIFT_THRESHOLD
 from src.utils.logger import get_logger
 
 # Initialization
@@ -96,7 +96,7 @@ def check_model_decay_callable(**kwargs):
 
     Returns
     -------
-    str : next task ID ("combine_data" or "no_model_decay")
+    str : next task ID ("combine_data", "send_warning_email" or "no_model_decay")
     """
     from src.monitoring.check_model_decay import check_model_decay
     f1 = check_model_decay()
@@ -155,6 +155,63 @@ def send_dynamic_warning_email(**kwargs):
     )
     logger.info(f"Sent {warning_level} warning email to {alert_email}")
 
+def send_dynamic_drift_warning_email(**kwargs):
+    """Send a dynamic data drift warning email."""
+
+    ti = kwargs['ti']
+    warning_level = ti.xcom_pull(task_ids='check_drift', key='warning_level')
+    drift_share = ti.xcom_pull(task_ids='check_drift', key='drift_share')
+    drift_score = drift_share * 100 if drift_share is not None else None
+
+    model_name = os.getenv("MLFLOW_EXPERIMENT_NAME", "Unknown Model")
+    alert_email = os.getenv("ALERT_EMAIL", "mlops-team@example.com")
+    drift_threshold = float(os.getenv("DRIFT_THRESHOLD", 0.7)) * 100 
+
+    if not warning_level or warning_level == 'healthy':
+        logger.info("No drift warning to send.")
+        return
+
+    # Customize subject and body
+    if warning_level == "critical":
+        subject = f"CRITICAL: {model_name} data drift nearing retraining threshold"
+        message = f"""
+        <h3>Critical Data Drift Warning</h3>
+        <p><b>{model_name}</b> shows a drift score of <b>{drift_score:.2f}%</b>, 
+        which is within 20% of the retraining threshold (<b>{drift_threshold:.2f}%</b>).</p>
+        <p>Immediate review is recommended — data distribution has changed significantly.</p>
+        """
+
+    elif warning_level == "early":
+        subject = f"Early Warning: {model_name} data drift increasing"
+        message = f"""
+        <h3>Early Data Drift Warning</h3>
+        <p><b>{model_name}</b> shows a drift score of <b>{drift_score:.2f}%</b>, 
+        within 40% of the retraining threshold (<b>{drift_threshold:.2f}%</b>).</p>
+        <p>Monitor closely — input data distributions are changing.</p>
+        """
+
+    elif warning_level == "retrain":
+        subject = f"Retraining Triggered: {model_name} severe data drift detected"
+        message = f"""
+        <h3>Severe Data Drift Detected</h3>
+        <p><b>{model_name}</b> has exceeded the drift threshold with a drift score of 
+        <b>{drift_score:.2f}%</b> (threshold: <b>{drift_threshold:.2f}%</b>).</p>
+        <p>Automatic retraining process has been initiated.</p>
+        """
+
+    else:
+        logger.info("Unknown drift warning level, no email sent.")
+        return
+
+    # Send email alert
+    send_email(
+        to=alert_email,
+        subject=subject,
+        html_content=message
+    )
+
+    logger.info(f"Sent {warning_level} drift warning email to {alert_email}")
+
 # CHECK IF PRODUCTION/INFERENCE DATA
 def check_production_data_callable(**kwargs):
     """
@@ -185,14 +242,43 @@ def check_data_drift_callable(**kwargs):
 
     Returns
     -------
-    str : next task ("combine_data" or "no_drift_detected")
+    str : next task ("combine_data", "send_warning_email", or "no_drift_detected")
     """
     from src.monitoring.check_data_drift import check_drift
-    exit_code = check_drift()
-    if exit_code==1:
-        return "combine_data"
-    else:
-        return "no_drift_detected"   
+
+    try:
+        exit_code, drift_share = check_drift()
+        drift_score = drift_share * 100  # convert to %
+        print(DRIFT_THRESHOLD)
+
+        # Log and push drift metrics
+        logger.info(f"Drift detection completed. Drift share: {drift_score:.2f}%")
+        kwargs['ti'].xcom_push(key='drift_share', value=drift_share)
+        kwargs['ti'].xcom_push(key='drift_score', value=drift_score)
+
+        # Decision logic
+        if exit_code == 1:
+            logger.warning(f"Severe data drift detected ({drift_score:.2f}%). Retraining will be triggered.")
+            kwargs['ti'].xcom_push(key='warning_level', value='retrain')
+            return "combine_data"
+        elif drift_share >= DRIFT_THRESHOLD * 0.8:
+            logger.warning(f"Moderate data drift detected ({drift_score:.2f}%) — critical warning.")
+            kwargs['ti'].xcom_push(key='warning_level', value='critical')
+            return "send_warning_email"
+
+        elif drift_share >= DRIFT_THRESHOLD * 0.6:
+            logger.info(f"Slight data drift detected ({drift_score:.2f}%) — early warning.")
+            kwargs['ti'].xcom_push(key='warning_level', value='early')
+            return "send_warning_email"
+
+        else:
+            logger.info(f"No significant data drift detected ({drift_score:.2f}%).")
+            kwargs['ti'].xcom_push(key='warning_level', value='healthy')
+            return "no_drift_detected"
+
+    except Exception as e:
+        logger.error(f"Error during drift detection: {e}")
+        raise RuntimeError(f"Drift detection failed: {e}")
 
 
 def check_active_canary():
@@ -254,7 +340,7 @@ def trigger_github_workflow_training(**context):
     REPO_NAME = os.getenv("REPO_NAME")
     WORKFLOW_TRAINING_FILE = os.getenv("WORKFLOW_TRAINING_FILE")
 
-    url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/actions/workflows/{WORKFLOW_TRAINING_FILE}/dispatches"
+    url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/actions/workflows/{WORKFLOW_TRAINING_FILE}/dispatche"
 
     headers = {
         "Accept": "application/vnd.github+json",
@@ -308,6 +394,13 @@ with DAG(
         python_callable=check_data_drift_callable,
         provide_context=True,
     )
+
+    # Send email alert when performance start to reduce
+    send_warning_email = PythonOperator(
+    task_id="send_warning_email",
+    python_callable=send_dynamic_drift_warning_email,
+    provide_context=True,
+    )
     
     # Merge data if drift detected
     combine_data_task = PythonOperator(
@@ -357,7 +450,7 @@ with DAG(
 
     # DAG flow
     check_production_data >> [check_drift, no_production_data]
-    check_drift >> [combine_data_task, no_drift_detected]
+    check_drift >> [send_warning_email,combine_data_task, no_drift_detected]
     combine_data_task >> check_canary_task 
     check_canary_task >> [handled_canary, no_canary]
     handled_canary >> merge_after_canary

@@ -53,7 +53,7 @@ def check_canary_from_logs(min_samples=30):
     df = pd.read_csv(path)
 
     # Ensure required columns exist
-    required_cols = ["Churn", "probability", "model_stage", "latency"]
+    required_cols = ["Churn", "probability", "model_stage","model_version", "latency"]
     for col in required_cols:
         if col not in df.columns:
             raise ValueError(f"Missing required column: {col}")
@@ -66,7 +66,7 @@ def check_canary_from_logs(min_samples=30):
 
     # Compute metrics for each model stage
     results = {}
-    for stage, group in df.groupby("model_stage"):
+    for stage, group in df.groupby(["model_stage", "model_version"]):
         if len(group) < min_samples:
             logger.warning(f"Stage '{stage}' has only {len(group)} samples, below min_samples={min_samples}. Skipping.")
             continue
