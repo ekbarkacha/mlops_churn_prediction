@@ -772,7 +772,7 @@ async def data_monitoring(request: Request, format: str = "html", window: int = 
 
         if cur_data.shape[0]>=10:
             ref_data = InferenceDatapreprocer(version_dir=app.state.version_folder["Production"]).data_cleaning(df=ref_data[EXPECTED_COLUMNS])
-            cur_data = cur_data[EXPECTED_COLUMNS]
+            cur_data = InferenceDatapreprocer(version_dir=app.state.version_folder["Production"]).data_cleaning(df=cur_data[EXPECTED_COLUMNS])
 
             report = Report(metrics=[DataDriftPreset()], include_tests=True)
             report = report.run(reference_data=ref_data, current_data=cur_data)
@@ -785,6 +785,7 @@ async def data_monitoring(request: Request, format: str = "html", window: int = 
 
     elif file_exist(RAW_DATA_PATH):
         ref_data = pd.read_csv(RAW_DATA_PATH)
+        ref_data = InferenceDatapreprocer(version_dir=app.state.version_folder["Production"]).data_cleaning(df=ref_data[EXPECTED_COLUMNS])
         report = Report(metrics=[DataSummaryPreset()])
         report = report.run(ref_data)
     else:
