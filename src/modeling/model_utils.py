@@ -27,7 +27,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-FASTAPI_URL = os.getenv("FASTAPI_URL")
+# Fastapi 
+if os.getenv("RUNNING_IN_DOCKER"):
+    FASTAPI_URL = os.getenv("FASTAPI_URL")
+else:
+    FASTAPI_URL = os.getenv("FASTAPI_URL_LOCAL")
+
 ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 
 

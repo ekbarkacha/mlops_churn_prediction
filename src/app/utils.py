@@ -31,7 +31,7 @@ from fastapi import HTTPException, Cookie,Request
 
 # Custom utility imports
 from src.app.config import SECRET_KEY,ALGORITHM,USERS_FILE,INFERENCE_DATA_PATH
-from src.utils.const import scaler_file_name,label_encoders_file_name
+from src.utils.const import scaler_file_name,label_encoders_file_name,EXPECTED_COLUMNS
 
 # JSON USER DATABASE HELPERS
 def load_users() -> dict:
@@ -143,7 +143,10 @@ def log_inference(raw_input: dict, prediction: int,probability: float,stage: str
     record['model_version'] = version
     record["latency"] = latency
 
+    COLUMNS = EXPECTED_COLUMNS+['probability','timestamp','model_stage','model_version',"latency"]
+
     df = pd.DataFrame([record])
+    df = df.reindex(columns=COLUMNS)
     os.makedirs(os.path.dirname(INFERENCE_DATA_PATH), exist_ok=True)
     file_exists = os.path.exists(INFERENCE_DATA_PATH)
     df.to_csv(INFERENCE_DATA_PATH, mode='a', header=not file_exists, index=False)
@@ -207,6 +210,31 @@ class InferenceDatapreprocer():
         df = df.copy(deep=True)
         # Cleaning
         df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce').fillna(0)
+        # Convert TotalCharges to numeric, coercing invalid values to NaN
+        df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
+
+        # Fill NaN values with 0
+        df['TotalCharges'] = df['TotalCharges'].fillna(0)
+
+        # Ensure 'SeniorCitizen' is treated as categorical
+        if 'SeniorCitizen' in df.columns:
+            df['SeniorCitizen'] = df['SeniorCitizen'].astype('category')
+
+        # Identify numeric and categorical columns
+        numeric_cols = df.select_dtypes(include=['number']).columns
+        categorical_cols = df.select_dtypes(exclude=['number']).columns
+
+        # Fill missing values for numeric columns with median
+        for col in numeric_cols:
+            if df[col].isna().sum() > 0:
+                median_value = df[col].median()
+                df[col].fillna(median_value, inplace=True)
+
+        # Fill missing values for categorical columns with mode
+        for col in categorical_cols:
+            if df[col].isna().sum() > 0:
+                mode_value = df[col].mode()[0]
+                df[col].fillna(mode_value, inplace=True)
         return df
 
     def preprocess(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -221,7 +249,31 @@ class InferenceDatapreprocer():
         ######## Preprocessing #######
         df = df.copy(deep=True)
         # Cleaning
-        df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce').fillna(0)
+        # Convert TotalCharges to numeric, coercing invalid values to NaN
+        df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
+
+        # Fill NaN values with 0
+        df['TotalCharges'] = df['TotalCharges'].fillna(0)
+
+        # Ensure 'SeniorCitizen' is treated as categorical
+        if 'SeniorCitizen' in df.columns:
+            df['SeniorCitizen'] = df['SeniorCitizen'].astype('category')
+
+        # Identify numeric and categorical columns
+        numeric_cols = df.select_dtypes(include=['number']).columns
+        categorical_cols = df.select_dtypes(exclude=['number']).columns
+
+        # Fill missing values for numeric columns with median
+        for col in numeric_cols:
+            if df[col].isna().sum() > 0:
+                median_value = df[col].median()
+                df[col].fillna(median_value, inplace=True)
+
+        # Fill missing values for categorical columns with mode
+        for col in categorical_cols:
+            if df[col].isna().sum() > 0:
+                mode_value = df[col].mode()[0]
+                df[col].fillna(mode_value, inplace=True)
 
         # Encode categorical columns
         for col, le in self.encoders.items():

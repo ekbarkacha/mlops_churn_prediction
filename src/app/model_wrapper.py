@@ -89,7 +89,31 @@ class UniversalMLflowWrapper(mlflow.pyfunc.PythonModel):
 
         ######## Preprocessing #######
         # Cleaning
-        df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce').fillna(0)
+        # Convert TotalCharges to numeric, coercing invalid values to NaN
+        df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
+
+        # Fill NaN values with 0
+        df['TotalCharges'] = df['TotalCharges'].fillna(0)
+
+        # Ensure 'SeniorCitizen' is treated as categorical
+        if 'SeniorCitizen' in df.columns:
+            df['SeniorCitizen'] = df['SeniorCitizen'].astype('category')
+
+        # Identify numeric and categorical columns
+        numeric_cols = df.select_dtypes(include=['number']).columns
+        categorical_cols = df.select_dtypes(exclude=['number']).columns
+
+        # Fill missing values for numeric columns with median
+        for col in numeric_cols:
+            if df[col].isna().sum() > 0:
+                median_value = df[col].median()
+                df[col].fillna(median_value, inplace=True)
+
+        # Fill missing values for categorical columns with mode
+        for col in categorical_cols:
+            if df[col].isna().sum() > 0:
+                mode_value = df[col].mode()[0]
+                df[col].fillna(mode_value, inplace=True)
 
         # Encode categorical columns
         for col, le in self.encoders.items():

@@ -6,8 +6,8 @@ services:
       container_name: fastapi
       env_file:
         - .env
-      # environment:
-      #   - RUNNING_IN_DOCKER=1
+      environment:
+        - RUNNING_IN_DOCKER=1
       ports:
         - "8000:8000"
       volumes:
@@ -22,7 +22,7 @@ services:
     env_file:
       - .env
     environment:
-      #- RUNNING_IN_DOCKER=1
+      - RUNNING_IN_DOCKER=1
       - AIRFLOW_HOME=/opt/airflow/airflow
     ports:
       - "8080:8080"
@@ -35,3 +35,14 @@ services:
       - ./data:/opt/airflow/data
     restart: always
     command: bash /opt/airflow/scripts/entrypoint.sh
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    env_file:
+      - .env
+    environment:
+      - RUNNING_IN_DOCKER=1
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml

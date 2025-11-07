@@ -20,7 +20,7 @@ from src.app.auth import (verify_api_key,verify_api2_key,get_password_hash,requi
 from src.app.schemas import User,CustomerInput
 from src.app.utils import (load_users,save_users,get_current_user,
                            log_predictions_task,read_csv_safe,file_exist,
-                           InferenceDatapreprocer,get_model)
+                           InferenceDatapreprocer,get_model,label_churn)
 from src.app.config import (APP_USERS,ACCESS_TOKEN_EXPIRE_DAYS,
                             MLFLOW_TRACKING_URI,MLFLOW_EXPERIMENT_NAME,
                             MODEL_DIR,EXPECTED_COLUMNS,INFERENCE_DATA_PATH,
@@ -466,8 +466,8 @@ async def predict(
             preds, probs = model.predict(model_input=df, return_proba=True, both=True)
             shap_values = model.explain_json(df)
 
-            results = df.copy()
-            results["prediction"] = preds
+            results = pd.DataFrame(raw_inputs)[EXPECTED_COLUMNS[:-1]]
+            results["prediction"] = [label_churn(p) for p in preds]
             results["probability"] = probs
 
             # Add background logging task
@@ -488,6 +488,8 @@ async def predict(
 
         # AGENT ROLE
         elif current_user["role"] == APP_USERS.get(1):
+            if file is not None:
+                raise HTTPException(status_code=400, detail="Agents can't upload a file")
             try:
                 data = await request.json()
                 logger.debug("JSON input received for prediction.")
@@ -525,7 +527,7 @@ async def predict(
 
             return JSONResponse({
                 "role": APP_USERS.get(1),
-                "prediction": int(preds[0]),
+                "prediction": label_churn(int(preds[0])),
                 "probability": float(probs[0]),
             })
 
@@ -544,7 +546,7 @@ async def predict(
 
 # 2. Feeedback Data (Only Admin)
 @limiter.limit("10/minute")
-@app.get("/feedback_data", dependencies=[Depends(verify_api_key)])
+@app.get("/feedback_data")
 async def get_feedback_data(request: Request,limit: int = 50, payload: dict = Depends(require_role(APP_USERS.get(2)))):
     """
     Allows Admins to view recent model inference results.
@@ -563,7 +565,7 @@ async def get_feedback_data(request: Request,limit: int = 50, payload: dict = De
         
         # Sort by timestamp and limit
         df = df.sort_values("timestamp", ascending=False).head(limit)
-        records = df.to_dict(orient="records")
+        records = df[EXPECTED_COLUMNS+['probability']].to_dict(orient="records")
 
         logger.debug(f"Returning top {limit} recent inference records.")
 
@@ -736,9 +738,7 @@ async def model_explainability(
 
     shap_values = model.explain_json(df)
     results = df.copy()
-    # results["prediction"] = preds
-    # results["probability"] = probs
-
+    
     logger.info("SHAP explanation generated successfully.")
     return JSONResponse({
         "role": APP_USERS.get(2),

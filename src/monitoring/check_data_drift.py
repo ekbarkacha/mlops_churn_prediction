@@ -141,14 +141,14 @@ def check_drift():
     logger.info(f"Drift report saved to: {DRIFT_REPORT_HTML_PATH}")
 
     # Return exit code for pipeline control
-    return 1 if drift_detected else 0
+    return 1 if drift_detected else 0, drift_share
 
 
 if __name__ == "__main__":
     """
     Entry point for manual execution during testing or running drift checks.
     """
-    exit_code = check_drift()
+    exit_code,drift_share = check_drift()
     print(f"Drift check completed with exit code {exit_code}",flush=True)
     sys.exit(exit_code)
 

@@ -33,7 +33,10 @@ KAGGLE_USERNAME = os.getenv("KAGGLE_USERNAME")
 KAGGLE_KEY = os.getenv("KAGGLE_KEY")
 
 # Setup Mlflow uri (note its aslo in src/app/config)
-MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI")
+if os.getenv("RUNNING_IN_DOCKER"):
+    MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI")
+else:
+    MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI_LOCAL")
 
 # Drift Threshold
 DRIFT_THRESHOLD = float(os.getenv("DRIFT_THRESHOLD",0.5))
@@ -42,7 +45,11 @@ DRIFT_THRESHOLD = float(os.getenv("DRIFT_THRESHOLD",0.5))
 MODEL_THRESHOLD = float(os.getenv("MODEL_THRESHOLD",0.80))
 
 # Fastapi 
-FASTAPI_URL = os.getenv("FASTAPI_URL")
+if os.getenv("RUNNING_IN_DOCKER"):
+    FASTAPI_URL = os.getenv("FASTAPI_URL")
+else:
+    FASTAPI_URL = os.getenv("FASTAPI_URL_LOCAL")
+
 
 # Admin api key
 ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
