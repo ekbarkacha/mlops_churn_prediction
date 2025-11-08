@@ -185,86 +185,77 @@ Security and compliance are integrated across all components of the MLOps system
 ---
 ## Repository Structure
 ```bash
+mlops_churn_prediction/
+│
+├─ airflow/ 
+|      └─ dag/             # Airflow DAGs for pipeline orchestration
+│
+├─ data/
+│   └─ raw/                # Raw customer datasets from kaggle
+│
+├─ docs/                   # Documentation: product design
+│
+├─ images/                 # Images i.e system archecture
+│
+├─ scripts/                # Utility scripts for setting up airflow.
+│
+├─ src/                    # Main source code (data pipeline, model, API)
+│
+├─ test/                   # Unit and integration tests
+│
+├─ .github/workflows/      # CI/CD workflows (GitHub Actions)
+│
+├─ Dockerfile.airflow      # Dockerfile for Airflow orchestration
+├─ Dockerfile.base         # Base Docker image for dependancies and system wich will be used in airflow and fastapi images
+├─ Dockerfile.fastapi      # Dockerfile for FastAPI deployment
+├─ Dockerfile.frontend     # Dockerfile for gradio app frontend
+├─ docker-compose-1.yml    # Docker Compose setup for frontend, grafana and mlflow
+├─ docker-compose-2.yml    # Docker Compose setup for fastapi,promethus.yml and airflow
+├─ prometheus.yml          # Prometheus configuration
+├─ requirements.txt        # Python dependencies
+├─ README.md               # Project documentation
+└─ .dvc/.dvcignore         # DVC files for data versioning
 
-├── Dockerfile.airflow
-├── Dockerfile.base
-├── Dockerfile.fastapi
-├── README.md
-├── airflow
-│   └── dags
-│       ├── canary_deployment.py
-│       └── model_decay_data_drift.py
-├── data
-│   ├── logs
-│   │   ├── LOGS_20251103.log
-│   │   └── LOGS_20251104.log
-│   ├── models
-│   │   └── scaler.joblib
-│   ├── preprocessors
-│   │   └── label_encoder.joblib
-│   ├── processed
-│   │   ├── customers_cleaned.csv
-│   │   └── customers_features.csv
-│   └── raw
-│       ├── WA_Fn-UseC_-Telco-Customer-Churn.csv
-│       └── WA_Fn-UseC_-Telco-Customer-Churn.csv.dvc
-├── docker-compose-1.yml
-├── docker-compose-2.yml
-├── docs
-│   └── Product_Design.pdf
-├── images
-│   └── system_design_flow_diagram.png
-├── prometheus.yml
-├── requirements.txt
-├── scripts
-│   ├── entrypoint.sh
-│   └── install.sh
-├── src
-│   ├── app
-│   │   ├── auth.py
-│   │   ├── config.py
-│   │   ├── main.py
-│   │   ├── model_wrapper.py
-│   │   ├── schemas.py
-│   │   └── utils.py
-│   ├── data_pipeline
-│   │   ├── __init__.py
-│   │   ├── __pycache__
-│   │   │   ├── __init__.cpython-312.pyc
-│   │   │   └── data_ingestion.cpython-312.pyc
-│   │   ├── data_ingestion.py
-│   │   ├── data_preprocessing.py
-│   │   ├── data_versioning_dvc.py
-│   │   └── feature_engineering.py
-│   ├── modeling
-│   │   ├── __init__.py
-│   │   ├── model_config.yaml
-│   │   ├── model_training.py
-│   │   ├── model_utils.py
-│   │   └── nn_model.py
-│   ├── monitoring
-│   │   ├── check_canary.py
-│   │   ├── check_data_drift.py
-│   │   ├── check_model_decay.py
-│   │   └── metrics.py
-│   └── utils
-│       ├── __init__.py
-│       ├── __pycache__
-│       │   ├── __init__.cpython-312.pyc
-│       │   ├── config.cpython-312.pyc
-│       │   ├── const.cpython-312.pyc
-│       │   └── logger.cpython-312.pyc
-│       ├── config.py
-│       ├── const.py
-│       └── logger.py
-├── test
-│   └── test_data_pipeline.py
-└── venv
-    └── include
-        └── python3.12
 ```
 
-## 📚 References
+### Prerequisites
+
+* Python 3.10+
+* Docker & Docker Compose
+* MLflow
+* DVC
+* Airflow
+* Grafana
+* Prometheus
+
+### Installation
+
+```bash
+git clone https://github.com/ekbarkacha/mlops_churn_prediction.git
+cd mlops_churn_prediction
+pip install -r requirements.txt
+```
+
+### Run Locally
+
+#### Docker-compose 1:
+```bash
+docker-compose -f docker-compose-1.yml up #Seting up mlflow, grafana and gradio app (frontend)
+# Access Grafana API at http://localhost:3030
+# Access Mlflow at http://localhost:5000
+# Access Gradio app at http://localhost:7862
+```
+
+#### Docker-compose 2:
+```bash
+docker build -t ml-base:latest -f Dockerfile.base . # will be required in docker-compose-2.yml by airflow and fastapi
+docker-compose -f docker-compose-2.yml up #Seting up airflow, prometheus and fastapi
+# Access FastAPI API at http://localhost:8000
+# Access Airflow at http://localhost:8080
+# Access Prometheus at http://localhost:9090
+```
+
+## References
 
 - [Kaggle Telco Customer Churn Dataset](https://www.kaggle.com/datasets/blastchar/telco-customer-churn)  
 - [MLflow Documentation](https://mlflow.org/docs/latest/index.html)  
