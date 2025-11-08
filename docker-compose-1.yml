@@ -8,9 +8,9 @@ services:
         - "7862:7862"
       env_file:
         - .env
-      environment:
-        MLFLOW_URL: http://mlflow:5000
-        GRAFANA_URL: http://grafana:3030
+      # environment:
+      #   MLFLOW_URL: http://mlflow:5000
+      #   GRAFANA_URL: http://grafana:3030
       restart: always
       depends_on:
         - mlflow

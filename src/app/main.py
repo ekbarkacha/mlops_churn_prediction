@@ -221,7 +221,7 @@ async def log_and_monitor_requests(request: Request, call_next):
         return response
 
     except Exception as e:
-        API_ERRORS.labels(endpoint=endpoint, method=method, status_code=500).inc()
+        API_ERRORS.labels(endpoint=endpoint, method=method, status=500).inc()
         logger.exception(f"{method} {endpoint} failed: {str(e)}")
         return Response("Internal server error", status_code=500)
 
